@@ -1,0 +1,10 @@
+##
+mkdir inputs/reference_counts_cleaned
+cp ../Seq/*/*_counts.txt inputs/reference_counts_cleaned
+
+mv inputs/reference_counts_cleaned/Fritz_lemur_catta_LPS_TCTTCGAC_L003_counts.txt inputs/reference_counts_cleaned/Fritz_Lcatta_LPS_TCTTCGAC_L003_counts.txt
+mv inputs/reference_counts_cleaned/Jones_lemur_catta_LPS_GACTACGA_L003_counts.txt inputs/reference_counts_cleaned/Jones_Lcatta_LPS_GACTACGA_L003_counts.txt
+mv inputs/reference_counts_cleaned/Jones_lemur_catta_Null_GTGATCCA_L003_counts.txt inputs/reference_counts_cleaned/Jones_Lcatta_Null_GTGATCCA_L003_counts.txt
+mv inputs/reference_counts_cleaned/Onyx_lemur_catta_Null_ACTCCTAC_L003_counts.txt inputs/reference_counts_cleaned/Onyx_Lcatta_Null_ACTCCTAC_L003_counts.txt
+
+
