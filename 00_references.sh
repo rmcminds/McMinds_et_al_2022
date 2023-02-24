@@ -18,7 +18,7 @@ module load apps/hisat2/2.1.0
 for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii; do
 
   ## download genome
-  rsync ftp://ftp.ensembl.org/ensembl/pub/release-109/fasta/${spec}/dna/*.dna.toplevel.fa.gz ./
+  rsync rsync://ftp.ensembl.org/ensembl/pub/release-109/fasta/${spec}/dna/*.dna.toplevel.fa.gz ./
 
   ## build genome index
   hisat2-build -p 20 <(zcat ${spec^}.*.fa.gz) ${spec}_index
