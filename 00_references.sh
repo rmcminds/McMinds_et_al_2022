@@ -19,8 +19,14 @@ for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus pa
 
   ## download genome
   wget -e robots=off -r -l1 -nd -A '*.dna.toplevel.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/dna/
+  zcat ${spec^}.*.fa.gz > tmp.fa
+  
+  wget -e robots=off -r -l1 -nd -A '*.109.gff3.gz' https://ftp.ensembl.org/pub/release-109/gff3/${spec}/
+  gunzip ${spec^}.*.gff3.gz
 
   ## build genome index
-  hisat2-build -p 20 <(zcat ${spec^}.*.fa.gz) ${spec}_index
+  hisat2-build -p 20 tmp.fa ${spec}_index
+  
+  rm tmp.fa
 
 done
