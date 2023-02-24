@@ -1,3 +1,7 @@
+## incorporate 'filter_genetrees' logic here directly (for orthologs, might be redundant, but for summed annotations with paralogs, want to think)
+## incorporate 'download_GO' here directly
+## modify using logic tested in 05b_run_batches_sparseOU_gp.r to ensure species means are distinct from individual sizes, and other logic therein
+
 
 load('outputs/primates/filter_genetrees.RData')
 

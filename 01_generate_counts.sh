@@ -21,41 +21,21 @@
 #in2={reverse_reads_Fastq}
 
 module purge
-module load apps/bowtie/2.3.4.1
 module load apps/samtools/1.3.1
 module load apps/hisat2/2.1.0
-module load apps/stringtie/1.3.4b
 
 # build index (only needed once per species)
 hisat2-build -p $SLURM_NTASKS ${genome_dir} ${species_index}
 
-# Setup Directory
 mkdir ${sample}
 cd ${sample}
 
-# Start HISAT2
-hisat2 -p 20 -x ${species_index} --dta-cufflinks -1 ${in1} -2 ${in2} -S ./${sample}.sam --summary-file ${sample}_summary.txt
+# align reads to reference genome with HISAT2, and sort and convert output to bam
+hisat2 -p 20 -x ${species_index} --dta-cufflinks -1 ${in1} -2 ${in2} --summary-file ${sample}_summary.txt | samtools view -@ 20 -bS - | samtools sort -@ 20 - > ${sample}.bam
 
-# Start samtools
-samtools view -@ 20 -bS ${sample}.sam > ${sample}_unsorted.bam
-samtools sort -@ 20 ${sample}_unsorted.bam -o ${sample}.bam
-
-rm *_unsorted.bam
-rm *.sam
-
-# Start Stringtie
-stringtie -p 20 -G ${genome_dir}/${genome} -o ${sample}_transcripts.gtf -A ${sample}_abundances.tsv -l ${sample} ${sample}.bam
-
+# calculate transcript abundances with StringTie
 module purge
-module load apps/subread/1.6.3
+module load apps/stringtie/1.3.4b
 
-# Start featurecounts
-featureCounts -T 20 -p -t gene -g gene_id -a ${genome_dir}/${genome} -G ${genome_dir}/${genome_fa} -J -o ${sample}_counts.txt ${sample}.bam
-
-echo "Finish - `date`"
-
-## run once after all samples have been processed independently:
-
-mkdir inputs/reference_counts_cleaned
-cp ../Seq/*/*_counts.txt inputs/reference_counts_cleaned
+stringtie -p 20 -B -G ${genome_dir}/${genome} -o ${sample}_transcripts.gtf -A ${sample}_abundances.tsv -l ${sample} ${sample}.bam
 
