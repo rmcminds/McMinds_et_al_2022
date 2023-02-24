@@ -1,3 +1,16 @@
+filter_inplace <- function() {
+  ## use this structure to read each line of flatfile as its own newick, and filter out if needed
+  con = file(filepath, "r")
+  while ( TRUE ) {
+    line = readLines(con, n = 1)
+    if ( length(line) == 0 ) {
+      break
+    }
+    print(line)
+  }
+  close(con)
+}
+
 thresh <- 4 #number of our species that the tree needs to contain in order to be kept
 nthreads <- 20
 
