@@ -1,9 +1,10 @@
 #!/bin/bash
+#SBATCH --job-name=01_generate_counts
+#SBATCH --mem=170G
+#SBATCH --time=6-00:00:00
 #SBATCH --qos=rra
 #SBATCH --partition=rra
-#SBATCH --time=6-00:00:00
-#SBATCH --mem=100G
-#SBATCH --job-name=01_generate_counts
+#SBATCH --ntasks=20
 #SBATCH --output=outputs/primates_20230224/01_generate_counts/logs/01_generate_counts_%a.log
 #SBATCH --array=0-5
 
@@ -20,6 +21,7 @@ module load apps/stringtie/1.3.4b
 
 for fwd in raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; do
 
+    # extract sample name from file name
     rev=${fwd%_R1_001.fastq.gz}_R2_001.fastq.gz
     sample=$(basename ${fwd})
     sample=${sample#*_}
@@ -27,7 +29,6 @@ for fwd in raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; 
     for i in {1..4}; do
       sample=${sample%_*}
     done
-    
     mkdir ${out_dir}/${sample}
 
     # align reads to reference genome with HISAT2, and sort and convert output to bam
