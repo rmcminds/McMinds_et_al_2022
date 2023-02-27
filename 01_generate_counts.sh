@@ -21,7 +21,8 @@ module load apps/stringtie/1.3.4b
 for fwd in raw_data/20221215_primate_allometry/fastqs/*_${spec}*_R1_001.fastq.gz; do
 
     rev=${fwd%_R1_001.fastq.gz}_R2_001.fastq.gz
-    sample=$(basename ${fwd%%_*})
+    base=$(basename ${fwd})
+    sample=${base%%_*}
 
     # align reads to reference genome with HISAT2, and sort and convert output to bam
     hisat2 -p 20 -x ${ref_dir}/${spec}_index --dta-cufflinks -1 ${fwd} -2 ${rev} --summary-file ${out_dir}/${sample}_summary.txt | samtools view -@ 20 -bS - | samtools sort -@ 20 - > ${out_dir}/${sample}.bam
