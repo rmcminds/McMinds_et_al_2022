@@ -11,7 +11,7 @@ genetrees <- lapply(genetree_paths, function(x) ape::read.tree(x))
 genefamilies <- lapply(genetrees, function(x) x$tip.label)
 
 martlist <- list(ENSCJAG='cjacchus_gene_ensembl', ENSG='hsapiens_gene_ensembl', ENSMICG='mmurinus_gene_ensembl', ENSMMUG='mmulatta_gene_ensembl', ENSPANG='panubis_gene_ensembl', ENSPPYG='pabelii_gene_ensembl')
-marts <- lapply(martlist, function(y) biomaRt::useMart('ensembl', y))
+marts <- lapply(martlist, function(y) biomaRt::useMart('ensembl', y, version=109))
 
 genefamilies_ul <- unlist(genefamilies)
 
