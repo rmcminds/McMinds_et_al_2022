@@ -27,11 +27,13 @@ for fwd in raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; 
     for i in {1..4}; do
       sample=${sample%_*}
     done
+    
+    mkdir ${out_dir}/${sample}
 
     # align reads to reference genome with HISAT2, and sort and convert output to bam
-    hisat2 -p 20 -x ${ref_dir}/${spec}_index --dta-cufflinks -1 ${fwd} -2 ${rev} --summary-file ${out_dir}/${sample}_summary.txt | samtools view -@ 20 -bS - | samtools sort -@ 20 - > ${out_dir}/${sample}.bam
+    hisat2 -p 20 -x ${ref_dir}/${spec}_index --dta-cufflinks -1 ${fwd} -2 ${rev} --summary-file ${out_dir}/${sample}/${sample}_summary.txt | samtools view -@ 20 -bS - | samtools sort -@ 20 - > ${out_dir}/${sample}/${sample}.bam
 
     # calculate transcript abundances with StringTie
-    stringtie -p 20 -B -G ${ref_dir}/${spec^}.*.gff3 -o ${out_dir}/${sample}_transcripts.gtf -A ${out_dir}/${sample}_abundances.tsv -l ${sample} ${out_dir}/${sample}.bam
+    stringtie -p 20 -B -G ${ref_dir}/${spec^}.*.gff3 -o ${out_dir}/${sample}/${sample}_transcripts.gtf -A ${out_dir}/${sample}/${sample}_abundances.tsv -l ${sample} ${out_dir}/${sample}/${sample}.bam
 
 done
