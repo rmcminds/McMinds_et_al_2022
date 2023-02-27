@@ -19,8 +19,12 @@ module load apps/hisat2/2.1.0
 for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii; do
 
   ## download genome
-  wget -e robots=off -r -N -l1 -nd -A '*.dna.toplevel.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/dna/
-  zcat ${spec^}.*.fa.gz > tmp.fa
+  wget -e robots=off -r -N -l1 -nd -A '*.dna.primary_assembly.fa.gz,*.dna.toplevel.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/dna/
+  if [ -f  ${spec^}.*.primary_assembly.fa.gz ]; then
+    zcat ${spec^}.*.primary_assembly.fa.gz > tmp.fa
+  else
+    zcat ${spec^}.*.toplevel.fa.gz > tmp.fa
+  fi
   
   wget -e robots=off -r -N -l1 -nd -A '*.109.gff3.gz' https://ftp.ensembl.org/pub/release-109/gff3/${spec}/
   gunzip ${spec^}.*.gff3.gz
