@@ -17,7 +17,7 @@ module load apps/samtools/1.3.1
 module load apps/hisat2/2.1.0
 module load apps/stringtie/1.3.4b
 
-for fwd in raw_data/20230224_primate_allometry/fastqs/*_${spec}*_R1_001.fastq.gz; do
+for fwd in raw_data/20221215_primate_allometry/fastqs/*_${spec}*_R1_001.fastq.gz; do
 
     rev=${fwd%_R1_001.fastq.gz}_R2_001.fastq.gz
     sample=${fwd%%_*}
