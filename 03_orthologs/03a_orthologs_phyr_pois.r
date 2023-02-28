@@ -1,17 +1,10 @@
-## incorporate 'filter_genetrees' logic here directly (for orthologs, might be redundant, but for summed annotations with paralogs, want to think)
 ## incorporate 'download_GO' here directly
 ## modify using logic tested in 05b_run_batches_sparseOU_gp.r to ensure species means are distinct from individual sizes, and other logic therein
 
-
-load('outputs/primates/filter_genetrees.RData')
-
 nthreads <- 6
-output_prefix <- path.expand('outputs/primates/')
+output_prefix <- path.expand('outputs/primates_20230224/')
 
-genetree_paths <- list.files(path='outputs/primates/filtered_ensembl_trees', pattern='*.phy$', full.names=T)
-names(genetree_paths) <- sapply(genetree_paths, function(x) paste(strsplit(basename(x),'.', fixed=T)[[1]][[1]], sep='_') )
-
-genetrees <- lapply(genetree_paths, function(x) ape::read.tree(x))
+genetrees <- read.tree('outputs/primates_20230224/00_references/Compara.109.protein_default.newick')
 
 species_strings <- c(Callithrix_jacchus='ENSCJAG',Homo_sapiens='ENSG',Microcebus_murinus='ENSMICG',Macaca_mulatta='ENSMMUG',Papio_hamadryas='ENSPANG',Pongo_abelii='ENSPPYG')
 
@@ -35,26 +28,85 @@ rownames(allcounts) <- names(orthologs)
 individuals <- unique(gsub('_.*','',colnames(allcounts)))
 N_individuals <- length(individuals)
 
-species_tree <- ape::read.tree('data/primate_allometry/Phylo tree files/pruned_elevenspecies.phy')
-species_tree$tip.label[species_tree$tip.label == 'Pongo_pygmaeus'] <- 'Pongo_abelii'
+## download and normalize species chronogram
+species_tree <- datelife::summarize_datelife_result(datelife::get_datelife_result(c('Callithrix jacchus', 'Homo sapiens', 'Macaca mulatta', 'Microcebus murinus', 'Papio anubis', 'Pongo abelii')), summary_format='phylo_biggest')
 
+species_tree_norm <- species_tree
+species_maxtime <- max(phytools::nodeHeights(species_tree_norm))
+species_tree_norm$edge.length <- species_tree_norm$edge.length / species_maxtime
+species_tree_norm <- reorder(species_tree_norm, order='postorder')
+##
+
+## import and wrangle sample metadata
+sample_data <- read.table('raw_data/20221215_primate_allometry/sample_data.txt', sep='\t', header=T)
+# summarize pooled Microcebus murinus samples into one pseudo-sample using geometric mean for numeric values (all should be positive and this makes sense for size and time)
+sample_data <- rbind(sample_data, apply(sample_data[sample_data$Genus == 'Microcebus',], 2, function(x) {temp <- unique(x); if(length(temp)==1) return(temp) else return(exp(mean(log(as.numeric(temp)))))}))
+sample_data$Animal.ID[nrow(sample_data)] <- 'mmurPool'
+#
+sample_data$genus_species <- paste(sample_data$Genus, sample_data$Species, sep='_')
 sample_data_filt <- sample_data[sample_data$Animal.ID %in% sub('_.*','',colnames(allcounts)),]
-sample_data_filt$body_mass_log <- log(as.numeric(sample_data_filt$Body.Mass..g.))
-body_mass_log_mean <- mean(sample_data_filt$body_mass_log)
-body_mass_log_sd <- sd(sample_data_filt$body_mass_log)
-sample_data_filt$body_mass_log_std <- (sample_data_filt$body_mass_log - body_mass_log_mean) / body_mass_log_sd
+##
 
+## import reference data for species average body sizes
+body_size_ref <- read.csv('raw_data/20221215_primate_allometry/gyz043_suppl_Supplement_Data.csv')
+body_size_ref$genus_species <- paste(body_size_ref$genus, body_size_ref$species, sep='_')
+##
+
+## calculate differences of individual sizes from species means and log-transform
+sample_data_filt$body_mass_log <- log(as.numeric(sample_data_filt$Body.Mass..g.))
+
+body_mass_log_sp_means <- sapply(unique(sample_data_filt$genus_species), \(x) log(body_size_ref$Mean_body_mass_g[body_size_ref$genus_species == x])) 
+
+sample_data_filt$body_mass_log_sp <- body_mass_log_sp_means[sample_data_filt$genus_species]
+sample_data_filt$body_mass_log_diff <- sample_data_filt$body_mass_log - sample_data_filt$body_mass_log_sp
+##
+
+## calculate a theoretical optimum body size on which to center the model (somewhat arbitrary but could help interpret 'main effects')
+penalized_likelihood_ou <- function(x) {
+  fit <- ape::compar.ou(body_mass_log_sp_means, species_tree_norm, alpha=exp(x))
+  return(fit$deviance - 2*dlnorm(fit$para[2,1], mean(body_mass_log_sp_means), sd(body_mass_log_sp_means), log=TRUE))
+} ## optimizing based on the compar.ou deviance alone produced crazy estimates for the optimum (>15000), so this essentially contains it with an 'empirical bayes'-like prior
+opt_ou_alpha <- exp(optim(0, penalized_likelihood_ou, method='BFGS')$par)
+body_mass_opt <- ape::compar.ou(body_mass_log_sp_means, species_tree_norm, alpha=opt_ou_alpha) ## by using an estimate of the evolutionary 'optimum', all main effects (such as LPS) can be interpreted as effects at this optimum, rather than at the arbitrary mean of all samples
+body_mass_log_mean <- body_mass_opt$para[3,1]
+##
+
+## standardize masses for model input
+body_mass_log_sd <- sd(sample_data_filt$body_mass_log_sp)
+body_mass_log_diff_sd <- sd(sample_data_filt$body_mass_log_diff)
+
+sample_data_filt$body_mass_log_sp_std <- (sample_data_filt$body_mass_log_sp - body_mass_log_mean) / body_mass_log_sd
+sample_data_filt$body_mass_log_diff_std <- sample_data_filt$body_mass_log_diff / body_mass_log_diff_sd
+##
+
+## import counts
+
+##
+
+## pool all immune gene counts and analyze univariate binomial model (percent of expressed transcripts annotated with immune functions)
+
+## how to pool normalization factors? arithmetic, geometric, harmonic mean, or something else? in terms of energy use, maybe shouldn't normalize by length at all...? three levels: total rna produced / total amino acids, total transcripts by number pooling gene duplications, and total transcripts per gene. each tells different
+percent_immune_res <- phyr::pglmm(count ~ offset(size_factor) + body_mass_log_sp_std * treatment + body_mass_log_diff_std * treatment + (1 | individual) + (1 | species__) + (1 | species@treatment) + (1 | species__@treatment), family = "poisson", cov_ranef = list(species = species_tree_norm), data=dat, bayes=TRUE, bayes_options=list(lincomb=lc))
+##
+
+## fit per-gene models
 cat('Fitting models\n')
 fits <- parallel::mclapply(rownames(allcounts), function(x) {
   cat(round(which(x==rownames(allcounts)) / nrow(allcounts),2) * 100, '%: ', x,'\n')
   dat <- data.frame(individual=sub('_.*','',colnames(allcounts)), treatment=factor(sub('.*_', '', colnames(allcounts)), levels=c('Null','LPS')), count = unname(t(allcounts[x,])))
+  
+  ## change this to be more deseq-like and incorporate gene lengths!!
   dat$size_factor <- apply(allcounts,2,function(x) sum(log(x[x>0])) / length(x))
+  ##
+  
   dat$species <- as.factor(sapply(dat$individual, function(z) sample_data_filt$genus_species[sample_data_filt$Animal.ID==z]))
-  dat$body_mass_log_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_std[sample_data_filt$Animal.ID==z])
+  dat$body_mass_log_sp_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
+  dat$body_mass_log_diff_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
 
   if(sd(allcounts[x,])>0) {
-    lc <- INLA::inla.make.lincomb(body_mass_log_std=1,'body_mass_log_std:treatmentLPS'=1)
-    fit <- tryCatch(phyr::pglmm(count ~ offset(size_factor) + body_mass_log_std * treatment + (1 | individual) + (1 | species__) + (1 | species@treatment) + (1 | species__@treatment), family = "poisson", cov_ranef = list(species = species_tree), data=dat, bayes=TRUE, bayes_options=list(lincomb=lc)),
+    lc <- INLA::inla.make.lincomb(body_mass_log_sp_std = 1, 'body_mass_log_sp_std:treatmentLPS' = 1)
+    ##add lcomb for diffs
+    fit <- tryCatch(phyr::pglmm(count ~ offset(size_factor) + body_mass_log_sp_std * treatment + body_mass_log_diff_std * treatment + (1 | individual) + (1 | species__) + (1 | species@treatment) + (1 | species__@treatment), family = "poisson", cov_ranef = list(species = species_tree_norm), data=dat, bayes=TRUE, bayes_options=list(lincomb=lc)),
                     error = function(e) NA)
     if(!all(is.na(fit))) {
       coefs <- c(phyr::fixef(fit)$Value, fit$inla.model$summary.lincomb.derived[1,'mean'])
