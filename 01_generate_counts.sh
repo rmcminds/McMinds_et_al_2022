@@ -36,7 +36,7 @@ for fwd in raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; 
     
     rm ${out_dir}/${sample}/tmp*
     
-    # calculate transcript abundances with StringTie
-    stringtie -p 20 -B -G ${ref_dir}/${spec^}.*.gff3 -o ${out_dir}/${sample}/${sample}_transcripts.gtf -A ${out_dir}/${sample}/${sample}_abundances.tsv -l ${sample} ${out_dir}/${sample}/${sample}.bam
+    # calculate transcript abundances with StringTie (ignore novel isoforms)
+    stringtie -p 20 -e -B -G ${ref_dir}/${spec^}.*.gff3 -o ${out_dir}/${sample}/${sample}_transcripts.gtf -A ${out_dir}/${sample}/${sample}_abundances.tsv -l ${sample} ${out_dir}/${sample}/${sample}.bam
 
 done

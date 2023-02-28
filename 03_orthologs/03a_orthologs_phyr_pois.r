@@ -80,7 +80,12 @@ sample_data_filt$body_mass_log_diff_std <- sample_data_filt$body_mass_log_diff /
 ##
 
 ## import counts
-
+## should iterate over species so all samples from a given species form a single table
+raw <- lapply(list.files(), \(x) {
+  tmp <- read.table('t_data.ctab', header=T, sep='\t')
+  tx2gene <- tmp[, c("t_name", "gene_name")]
+  return(tximport::tximport(files, type = "stringtie", tx2gene = tx2gene))
+})
 ##
 
 ## pool all immune gene counts and analyze univariate binomial model (percent of expressed transcripts annotated with immune functions)
