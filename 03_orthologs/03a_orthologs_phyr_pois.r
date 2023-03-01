@@ -2,11 +2,91 @@
 ## modify using logic tested in 05b_run_batches_sparseOU_gp.r to ensure species means are distinct from individual sizes, and other logic therein
 
 nthreads <- 6
+raw_data_prefix <- path.expand('raw_data/20221215_primate_allometry/')
 output_prefix <- path.expand('outputs/primates_20230224/')
 
-genetrees <- read.tree('outputs/primates_20230224/00_references/Compara.109.protein_default.newick')
+species_strings <- c(Callithrix_jacchus='ENSCJAG', Homo_sapiens='ENSG', Microcebus_murinus='ENSMICG', Macaca_mulatta='ENSMMUG', Papio_anubis='ENSPANG', Pongo_abelii='ENSPPYG')
 
-species_strings <- c(Callithrix_jacchus='ENSCJAG',Homo_sapiens='ENSG',Microcebus_murinus='ENSMICG',Macaca_mulatta='ENSMMUG',Papio_hamadryas='ENSPANG',Pongo_abelii='ENSPPYG')
+## download and normalize species chronogram
+species_tree <- datelife::summarize_datelife_result(datelife::get_datelife_result(c('Callithrix jacchus', 'Homo sapiens', 'Macaca mulatta', 'Microcebus murinus', 'Papio anubis', 'Pongo abelii')), summary_format='phylo_biggest')
+
+species_tree_norm <- species_tree
+species_maxtime <- max(phytools::nodeHeights(species_tree_norm))
+species_tree_norm$edge.length <- species_tree_norm$edge.length / species_maxtime
+species_tree_norm <- reorder(species_tree_norm, order='postorder')
+##
+
+## import and wrangle sample metadata
+sample_data <- read.table(file.path(raw_data_prefix, 'sample_data.txt'), sep='\t', header=T)
+# summarize pooled Microcebus murinus samples into one pseudo-sample using geometric mean for numeric values (all should be positive and this makes sense for size and time)
+sample_data <- rbind(sample_data, apply(sample_data[sample_data$Genus == 'Microcebus',], 2, function(x) {temp <- unique(x); if(length(temp)==1) return(temp) else return(exp(mean(log(as.numeric(temp)))))}))
+sample_data$Animal.ID[nrow(sample_data)] <- 'mmurPool'
+#
+sample_data$genus_species <- paste(sample_data$Genus, sample_data$Species, sep='_')
+##
+
+## import counts
+countfiles <- Sys.glob(file.path(output_prefix, '/01_generate_counts/*/t_data.ctab'))
+samples <- basename(dirname(countfiles))
+names(countfiles) <- samples
+sample_data_filt <- sample_data[sample_data$Animal.ID %in% sub('_.*', '', samples),]
+
+raw_txi <- lapply(names(species_strings), \(x) {
+  cfiles <- countfiles[sub('_.*', '', samples) %in% sample_data_filt$Animal.ID[sample_data_filt$genus_species == x]]
+  tmp <- read.table(cfiles[[1]], header = TRUE, sep = '\t')
+  tmp$gene_id <- sub('.*:', '', tmp$gene_id)
+  ensembl2ext <- unique(tmp[, c('gene_id', 'gene_name')])
+  tx2gene <- tmp[, c('t_name', 'gene_id')]
+  return(c(tximport::tximport(cfiles, type = 'stringtie', tx2gene = tx2gene, readLength = 100), ensembl2ext = ensembl2ext))
+})
+##
+
+## import reference data for species average body sizes
+body_size_ref <- read.csv(file.path(raw_data_prefix, 'gyz043_suppl_Supplement_Data.csv'))
+body_size_ref$genus_species <- paste(body_size_ref$genus, body_size_ref$species, sep='_')
+##
+
+## calculate differences of individual sizes from species means and log-transform
+sample_data_filt$body_mass_log <- log(as.numeric(sample_data_filt$Body.Mass..g.))
+
+body_mass_log_sp_means <- sapply(unique(sample_data_filt$genus_species), \(x) log(as.numeric(body_size_ref$Mean_body_mass_g[body_size_ref$genus_species == x])))
+
+sample_data_filt$body_mass_log_sp <- body_mass_log_sp_means[sample_data_filt$genus_species]
+sample_data_filt$body_mass_log_diff <- sample_data_filt$body_mass_log - sample_data_filt$body_mass_log_sp
+##
+
+## calculate a theoretical optimum body size on which to center the model (somewhat arbitrary but could help interpret 'main effects')
+penalized_likelihood_ou <- function(x) {
+  fit <- ape::compar.ou(body_mass_log_sp_means, species_tree_norm, alpha = exp(x))
+  return(fit$deviance - 2 * dlnorm(fit$para[2,1], mean(body_mass_log_sp_means), sd(body_mass_log_sp_means), log = TRUE))
+} ## optimizing based on the compar.ou deviance alone produced crazy estimates for the optimum (>15000), so this essentially contains it with an 'empirical bayes'-like prior
+opt_ou_alpha <- exp(optim(0, penalized_likelihood_ou, method = 'BFGS')$par)
+body_mass_opt <- ape::compar.ou(body_mass_log_sp_means, species_tree_norm, alpha = opt_ou_alpha) ## by using an estimate of the evolutionary 'optimum', all main effects (such as LPS) can be interpreted as effects at this optimum, rather than at the arbitrary mean of all samples
+body_mass_log_center <- body_mass_opt$para[3,1]
+##
+
+## standardize masses for model input
+body_mass_log_sd <- sd(sample_data_filt$body_mass_log_sp)
+body_mass_log_diff_sd <- sd(sample_data_filt$body_mass_log_diff)
+
+sample_data_filt$body_mass_log_sp_std <- (sample_data_filt$body_mass_log_sp - body_mass_log_center) / body_mass_log_sd
+sample_data_filt$body_mass_log_diff_std <- sample_data_filt$body_mass_log_diff / body_mass_log_diff_sd
+##
+
+## pool all immune gene counts and analyze univariate binomial model (percent of expressed transcripts annotated with immune functions)
+## what is the most interesting contrast here? immune annotated vs literally everything else including ribosomes and noncoding? filter out ribosomes? just look at protein coding? ribosomes and globin were targeted for removal during library prep so could have odd patterns and still dominate the contrast. probably should just look at protein coding genes, and then also filter out globin reads by finding anything in the same gene family as the harrington gene list
+## feels weird to round decimals for poisson error, but since data were counts at one point, zeros are possible, so doesn't make sense to just log-transform and use gaussian error; and error probably still scales like poisson such that low counts are less meaningful (and the decimal values rounded off would contribute negligible information)
+## how to pool normalization factors? arithmetic, geometric, harmonic mean, or something else? in terms of energy use, maybe shouldn't normalize by length at all...? three levels: total rna produced / total amino acids, total transcripts by number pooling gene duplications, and total transcripts per gene. each tells different
+## refs (maybe not for pooled calc but just for later?):
+## DESeq2:::DESeqDataSetFromTximport
+## getMethod(DESeq2::estimateSizeFactors, 'DESeqDataSet')
+## DESeq2:::estimateNormFactors
+percent_immune_res <- phyr::pglmm(count ~ offset(size_factor) + body_mass_log_sp_std * treatment + body_mass_log_diff_std * treatment + (1 | individual) + (1 | species__) + (1 | species@treatment) + (1 | species__@treatment), family = "poisson", cov_ranef = list(species = species_tree_norm), data=dat, bayes=TRUE, bayes_options=list(lincomb=lc))
+##
+
+##
+genetrees <- read.tree(file.path(output_prefix, '00_references/Compara.109.protein_default.newick'))
+names(genetrees) <- paste('family', 1:length(genetrees), sep='_') ## arbitrary gene family names
 
 orthologs <- lapply(genetrees, function(tree) {
   nodes <- unique(tree$edge[,1])
@@ -28,71 +108,6 @@ rownames(allcounts) <- names(orthologs)
 individuals <- unique(gsub('_.*','',colnames(allcounts)))
 N_individuals <- length(individuals)
 
-## download and normalize species chronogram
-species_tree <- datelife::summarize_datelife_result(datelife::get_datelife_result(c('Callithrix jacchus', 'Homo sapiens', 'Macaca mulatta', 'Microcebus murinus', 'Papio anubis', 'Pongo abelii')), summary_format='phylo_biggest')
-
-species_tree_norm <- species_tree
-species_maxtime <- max(phytools::nodeHeights(species_tree_norm))
-species_tree_norm$edge.length <- species_tree_norm$edge.length / species_maxtime
-species_tree_norm <- reorder(species_tree_norm, order='postorder')
-##
-
-## import and wrangle sample metadata
-sample_data <- read.table('raw_data/20221215_primate_allometry/sample_data.txt', sep='\t', header=T)
-# summarize pooled Microcebus murinus samples into one pseudo-sample using geometric mean for numeric values (all should be positive and this makes sense for size and time)
-sample_data <- rbind(sample_data, apply(sample_data[sample_data$Genus == 'Microcebus',], 2, function(x) {temp <- unique(x); if(length(temp)==1) return(temp) else return(exp(mean(log(as.numeric(temp)))))}))
-sample_data$Animal.ID[nrow(sample_data)] <- 'mmurPool'
-#
-sample_data$genus_species <- paste(sample_data$Genus, sample_data$Species, sep='_')
-sample_data_filt <- sample_data[sample_data$Animal.ID %in% sub('_.*','',colnames(allcounts)),]
-##
-
-## import reference data for species average body sizes
-body_size_ref <- read.csv('raw_data/20221215_primate_allometry/gyz043_suppl_Supplement_Data.csv')
-body_size_ref$genus_species <- paste(body_size_ref$genus, body_size_ref$species, sep='_')
-##
-
-## calculate differences of individual sizes from species means and log-transform
-sample_data_filt$body_mass_log <- log(as.numeric(sample_data_filt$Body.Mass..g.))
-
-body_mass_log_sp_means <- sapply(unique(sample_data_filt$genus_species), \(x) log(body_size_ref$Mean_body_mass_g[body_size_ref$genus_species == x])) 
-
-sample_data_filt$body_mass_log_sp <- body_mass_log_sp_means[sample_data_filt$genus_species]
-sample_data_filt$body_mass_log_diff <- sample_data_filt$body_mass_log - sample_data_filt$body_mass_log_sp
-##
-
-## calculate a theoretical optimum body size on which to center the model (somewhat arbitrary but could help interpret 'main effects')
-penalized_likelihood_ou <- function(x) {
-  fit <- ape::compar.ou(body_mass_log_sp_means, species_tree_norm, alpha=exp(x))
-  return(fit$deviance - 2*dlnorm(fit$para[2,1], mean(body_mass_log_sp_means), sd(body_mass_log_sp_means), log=TRUE))
-} ## optimizing based on the compar.ou deviance alone produced crazy estimates for the optimum (>15000), so this essentially contains it with an 'empirical bayes'-like prior
-opt_ou_alpha <- exp(optim(0, penalized_likelihood_ou, method='BFGS')$par)
-body_mass_opt <- ape::compar.ou(body_mass_log_sp_means, species_tree_norm, alpha=opt_ou_alpha) ## by using an estimate of the evolutionary 'optimum', all main effects (such as LPS) can be interpreted as effects at this optimum, rather than at the arbitrary mean of all samples
-body_mass_log_mean <- body_mass_opt$para[3,1]
-##
-
-## standardize masses for model input
-body_mass_log_sd <- sd(sample_data_filt$body_mass_log_sp)
-body_mass_log_diff_sd <- sd(sample_data_filt$body_mass_log_diff)
-
-sample_data_filt$body_mass_log_sp_std <- (sample_data_filt$body_mass_log_sp - body_mass_log_mean) / body_mass_log_sd
-sample_data_filt$body_mass_log_diff_std <- sample_data_filt$body_mass_log_diff / body_mass_log_diff_sd
-##
-
-## import counts
-## should iterate over species so all samples from a given species form a single table
-raw <- lapply(list.files(), \(x) {
-  tmp <- read.table('t_data.ctab', header=T, sep='\t')
-  tx2gene <- tmp[, c("t_name", "gene_name")]
-  return(tximport::tximport(files, type = "stringtie", tx2gene = tx2gene))
-})
-##
-
-## pool all immune gene counts and analyze univariate binomial model (percent of expressed transcripts annotated with immune functions)
-
-## how to pool normalization factors? arithmetic, geometric, harmonic mean, or something else? in terms of energy use, maybe shouldn't normalize by length at all...? three levels: total rna produced / total amino acids, total transcripts by number pooling gene duplications, and total transcripts per gene. each tells different
-percent_immune_res <- phyr::pglmm(count ~ offset(size_factor) + body_mass_log_sp_std * treatment + body_mass_log_diff_std * treatment + (1 | individual) + (1 | species__) + (1 | species@treatment) + (1 | species__@treatment), family = "poisson", cov_ranef = list(species = species_tree_norm), data=dat, bayes=TRUE, bayes_options=list(lincomb=lc))
-##
 
 ## fit per-gene models
 cat('Fitting models\n')
