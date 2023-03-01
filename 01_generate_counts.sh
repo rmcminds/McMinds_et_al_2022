@@ -15,10 +15,10 @@ ref_dir=outputs/primates_20230224/00_references
 out_dir=outputs/primates_20230224/01_generate_counts
 
 module purge
-module load apps/samtools/1.3.1
-module load apps/hisat2/2.1.0
-module load apps/stringtie/1.3.4b
-
+module load hub.apps/anaconda3/2020.11
+source /shares/omicshub/apps/anaconda3/etc/profile.d/conda.sh
+conda deactivate
+conda activate salmon
 for fwd in raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; do
 
     # extract sample name from file name
@@ -29,14 +29,12 @@ for fwd in raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; 
     for i in {1..4}; do
       sample=${sample%_*}
     done
-    mkdir ${out_dir}/${sample}
 
-    # align reads to reference genome with HISAT2, and sort and convert output to bam
-    hisat2 -p 20 -x ${ref_dir}/${spec}_index --dta-cufflinks -1 ${fwd} -2 ${rev} --summary-file ${out_dir}/${sample}/${sample}_summary.txt | samtools view -@ 20 -bS - | samtools sort -T ${out_dir}/${sample}/tmp -m 5G -@ 20 - > ${out_dir}/${sample}/${sample}.bam
-    
-    rm ${out_dir}/${sample}/tmp*
-    
-    # calculate transcript abundances with StringTie (ignore novel isoforms)
-    stringtie -p 20 -e -B -G ${ref_dir}/${spec^}.*.gff3 -o ${out_dir}/${sample}/${sample}_transcripts.gtf -A ${out_dir}/${sample}/${sample}_abundances.tsv -l ${sample} ${out_dir}/${sample}/${sample}.bam
+    salmon quant --index ${ref_dir}/${spec}_index \
+      --threads 20 \
+      --libType A \
+      -1 ${fwd} \
+      -2 ${rev} \
+      --output ${out_dir}/${spec}_${sample}_salmon
 
 done
