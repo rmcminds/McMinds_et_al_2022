@@ -1,11 +1,10 @@
-## incorporate 'download_GO' here directly
 ## modify using logic tested in 05b_run_batches_sparseOU_gp.r to ensure species means are distinct from individual sizes, and other logic therein
 
 nthreads <- 6
 raw_data_prefix <- path.expand('raw_data/20221215_primate_allometry/')
 output_prefix <- path.expand('outputs/primates_20230224/')
 
-species_strings <- c(Callithrix_jacchus='ENSCJAG', Homo_sapiens='ENSG', Microcebus_murinus='ENSMICG', Macaca_mulatta='ENSMMUG', Papio_anubis='ENSPANG', Pongo_abelii='ENSPPYG')
+species_strings <- c(Callithrix_jacchus='ENSCJA', Homo_sapiens='ENS', Microcebus_murinus='ENSMIC', Macaca_mulatta='ENSMMU', Papio_anubis='ENSPAN', Pongo_abelii='ENSPPY')
 
 ## download and normalize species chronogram
 species_tree <- datelife::summarize_datelife_result(datelife::get_datelife_result(c('Callithrix jacchus', 'Homo sapiens', 'Macaca mulatta', 'Microcebus murinus', 'Papio anubis', 'Pongo abelii')), summary_format='phylo_biggest')
@@ -26,18 +25,44 @@ sample_data$genus_species <- paste(sample_data$Genus, sample_data$Species, sep='
 ##
 
 ## import counts
-countfiles <- Sys.glob(file.path(output_prefix, '/01_generate_counts/*/t_data.ctab'))
-samples <- basename(dirname(countfiles))
-names(countfiles) <- samples
+countfiles <- Sys.glob(file.path(output_prefix, '/01_generate_counts/*/quant.sf'))
+samples <- sapply(basename(dirname(countfiles)), \(x) paste(strsplit(x,'_')[[1]][3:4], collapse='_'))
+names(countfiles) <- names(samples)
 sample_data_filt <- sample_data[sample_data$Animal.ID %in% sub('_.*', '', samples),]
 
+martlist <- list(ENSCJA='cjacchus_gene_ensembl', ENS='hsapiens_gene_ensembl', ENSMIC='mmurinus_gene_ensembl', ENSMMU='mmulatta_gene_ensembl', ENSPAN='panubis_gene_ensembl', ENSPPY='pabelii_gene_ensembl')
+
+genetrees <- ape::read.tree(file.path(output_prefix, '00_references/Compara.109.protein_default.newick'))
+names(genetrees) <- paste('family', 1:length(genetrees), sep='_') ## arbitrary gene family names
+
+human_globin_gene_ids <- c('ENSG00000206172', 'ENSG00000188536', 'ENSG00000244734', 'ENSG00000229988', 'ENSG00000223609', 'ENSG00000213931', 'ENSG00000213934', 'ENSG00000196565', 'ENSG00000206177', 'ENSG00000086506', 'ENSG00000130656', 'ENSG00000206178') # https://doi.org/10.1038/s41598-020-62801-6 Table S1
+human_globin_peptide_ids <- biomaRt::getBM(attributes = 'ensembl_peptide_id', 
+                                           filters = 'ensembl_gene_id', 
+                                           values = human_globin_gene_ids, 
+                                           mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', 'hsapiens_gene_ensembl', version='Ensembl Genes 109'), 
+                                           uniqueRows = TRUE)[,1]
+
+globin_trees <- names(genetrees)[sapply(genetrees, \(x) any(human_globin_peptide_ids %in% x$tip.label))]
+tax_globins <- lapply(names(species_strings), \(x) {
+  grep(paste0(species_strings[[x]],'P[[:digit:]]'), unlist(sapply(genetrees[globin_trees], \(y) y$tip.label)), value=TRUE)
+})
+  
 raw_txi <- lapply(names(species_strings), \(x) {
-  cfiles <- countfiles[sub('_.*', '', samples) %in% sample_data_filt$Animal.ID[sample_data_filt$genus_species == x]]
-  tmp <- read.table(cfiles[[1]], header = TRUE, sep = '\t')
-  tmp$gene_id <- sub('.*:', '', tmp$gene_id)
-  ensembl2ext <- unique(tmp[, c('gene_id', 'gene_name')])
-  tx2gene <- tmp[, c('t_name', 'gene_id')]
-  return(c(tximport::tximport(cfiles, type = 'stringtie', tx2gene = tx2gene, readLength = 100), ensembl2ext = ensembl2ext))
+  cfiles <- countfiles[grep(x, names(countfiles), ignore.case = TRUE)]
+  tmp <- read.table(countfiles[[1]], header=TRUE, sep='\t')
+  tmp <- biomaRt::getBM(attributes = c('ensembl_transcript_id','ensembl_gene_id','external_gene_name','go_id'), 
+                        filters = 'ensembl_transcript_id', 
+                        values = tmp$Name, 
+                        mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', martlist[[species_strings[[x]]]], version='Ensembl Genes 109'), 
+                        uniqueRows = TRUE)
+  ensembl2ext <- unique(tmp[, c('ensembl_gene_id', 'external_gene_name')])
+  tx2gene <- tmp[, c('ensembl_transcript_id', 'ensembl_gene_id')]
+  txi <- tximport::tximport(cfiles, type = 'salmon', tx2gene = tx2gene)
+  txi$abundance <- txi$abundance[!rownames(txi$abundance) %in% tax_globins[[x]],]
+  txi$counts <- txi$counts[!rownames(txi$counts) %in% tax_globins[[x]],]
+  txi$length <- txi$length[!rownames(txi$length) %in% tax_globins[[x]],]
+  ensembl2ext <- ensembl2ext[!ensembl2ext$ensembl_gene_id %in% tax_globins[[x]],]
+  return(c(txi, ensembl2ext = ensembl2ext))
 })
 ##
 
@@ -85,9 +110,6 @@ percent_immune_res <- phyr::pglmm(count ~ offset(size_factor) + body_mass_log_sp
 ##
 
 ##
-genetrees <- read.tree(file.path(output_prefix, '00_references/Compara.109.protein_default.newick'))
-names(genetrees) <- paste('family', 1:length(genetrees), sep='_') ## arbitrary gene family names
-
 orthologs <- lapply(genetrees, function(tree) {
   nodes <- unique(tree$edge[,1])
   alldescs <- lapply(phangorn::Descendants(tree, nodes), function(y) tree$tip.label[y])

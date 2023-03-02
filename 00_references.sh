@@ -24,9 +24,9 @@ conda activate salmon
 for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii; do
 
   ## download transcriptome reference
-  wget -e robots=off -r -N -l1 -nd -A '*.cdna.all.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/cdna/
+  wget -e robots=off -r -N -l1 -nd -A '*.cds.all.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/cds/
 
   ## build transcriptome index
-  salmon index --index ${spec}_index --transcripts ${spec^}.*.cdna.all.fa.gz
+  salmon index --index ${spec}_index --transcripts ${spec^}.*.cds.all.fa.gz
 
 done
