@@ -182,9 +182,9 @@ ortho_immune_restab <- ortho_immune_res$inla.model$summary.lincomb.derived
 
 ## pool ALL immune-annotated genes
 txi_all_immune_pool <- txi_ortho_immune_pool
-txi_all_immune_pool$abundance['immune',] <- do.call(c, lapply(raw_txi, \(x) colSums(x$abundance[rownames(x$abundance) %in% immuneGenes])))
-txi_all_immune_pool$counts['immune',] <- do.call(c, lapply(raw_txi, \(x) colSums(x$counts[rownames(x$counts) %in% immuneGenes])))
-txi_all_immune_pool$length <- do.call(c, lapply(raw_txi, \(x) colSums(x$length[rownames(x$length) %in% immuneGenes] * x$abundance[rownames(x$abundance) %in% immuneGenes]))) / txi_all_immune_pool$abundance['immune',]  ## weighted arithmetic mean length
+txi_all_immune_pool$abundance['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$abundance[rownames(x$abundance) %in% immuneGenes, , drop=FALSE])))
+txi_all_immune_pool$counts['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$counts[rownames(x$counts) %in% immuneGenes, , drop=FALSE])))
+txi_all_immune_pool$length['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$length[rownames(x$length) %in% immuneGenes, , drop=FALSE] * x$abundance[rownames(x$abundance) %in% immuneGenes, , drop=FALSE]))) / txi_all_immune_pool$abundance['immune',]  ## weighted arithmetic mean length
 
 ## get normalization factors
 des_all_pool <- DESeq2:::DESeqDataSetFromTximport(txi_all_immune_pool, data.frame(Int=rep(1,ncol(txi_all_immune_pool$counts))), ~1)
@@ -209,9 +209,8 @@ all_immune_restab <- all_immune_res$inla.model$summary.lincomb.derived
 ## fit per-gene models
 
 ## get per-observation normalization factors
-des <- DESeq2:::DESeqDataSetFromTximport(txi_ortho, sample_data_filt, ~1)
+des <- DESeq2:::DESeqDataSetFromTximport(txi_ortho, data.frame(Int=rep(1,ncol(txi_ortho$counts))), ~1)
 des <- DESeq2::estimateSizeFactors(des)
-normalization_factors <- log(DESeq2::normalizationFactors(des))
 
 cat('Fitting models\n')
 fits <- parallel::mclapply(rownames(des), function(x) {
@@ -231,7 +230,7 @@ fits <- parallel::mclapply(rownames(des), function(x) {
                     error = function(e) NA)
     if(!all(is.na(fit))) {
       coefs <- c(phyr::fixef(fit)$Value, fit$inla.model$summary.lincomb.derived[1:2,'mean'])
-      coef_cis <- rbind(fit$B.ci, LPS_beta=as.numeric(fit$inla.model$summary.lincomb.derived[1:2,c('0.025quant','0.975quant')]))
+      coef_cis <- rbind(fit$B.ci, LPS_beta=fit$inla.model$summary.lincomb.derived[1:2,c('0.025quant','0.975quant')])
     } else {
       coefs <- NA
       coef_cis <- NA
@@ -245,5 +244,5 @@ fits <- parallel::mclapply(rownames(des), function(x) {
 }, mc.cores = nthreads)
 names(fits) <- rownames(des)
 
-save.image(file.path(output_prefix,'03a_phyr_results.RData'))
+save.image(file.path(output_prefix,'02_phyr_results.RData'))
 
