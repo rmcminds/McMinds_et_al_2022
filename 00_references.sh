@@ -45,8 +45,6 @@ for i in 0 1 2; do
   
 done
 
-rm -r ncbi_dataset
-
 for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii; do
 
   (
@@ -68,3 +66,7 @@ for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus pa
   ) &
 
 done
+
+wait
+
+rm -r ncbi_dataset
