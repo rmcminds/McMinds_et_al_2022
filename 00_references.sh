@@ -11,6 +11,7 @@ mkdir -p outputs/primates_20230304/00_references
 cd outputs/primates_20230304/00_references
 
 (
+
     ncbispec=(daubentonia_madagascariensis lemur_catta sapajus_appella)
     ncbiacc=(GCA_023783475.1 GCF_020740605.2 GCF_009761245.1)
 
@@ -45,6 +46,11 @@ cd outputs/primates_20230304/00_references
       ) &
       
     done
+    
+    wait
+
+    rm -r ncbi_dataset
+    
 ) &
 
 module purge
@@ -70,7 +76,3 @@ for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus pa
   ) &
 
 done
-
-wait
-
-rm -r ncbi_dataset
