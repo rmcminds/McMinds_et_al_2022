@@ -29,44 +29,38 @@ module purge
 module load apps/hisat2/2.1.0
 for i in 0 1 2; do
 
-  (
-      filename=$(basename ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz)
+  filename=$(basename ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz)
 
-      cp ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz ${ncbispec[$i]^}_${filename/fna.gz/fa.gz}
+  cp ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz ${ncbispec[$i]^}_${filename/fna.gz/fa.gz}
 
-      ## genomes seem to need to be unzipped for hisat2 indexing but can be stored zipped after that
-      zcat ${ncbispec[$i]^}_${filename/fna.gz/fa.gz} > ${ncbispec[$i]}_tmp.fa
+  ## genomes seem to need to be unzipped for hisat2 indexing but can be stored zipped after that
+  zcat ${ncbispec[$i]^}_${filename/fna.gz/fa.gz} > ${ncbispec[$i]}_tmp.fa
 
-      ## build genome index
-      hisat2-build -p 5 ${ncbispec[$i]}_tmp.fa ${ncbispec[$i]}_index
-      
-      rm ${ncbispec[$i]}_tmp.fa
-  ) &
+  ## build genome index
+  hisat2-build -p 20 ${ncbispec[$i]}_tmp.fa ${ncbispec[$i]}_index
   
-done
+  rm ${ncbispec[$i]}_tmp.fa
+  
+done &
 
 for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii; do
 
-  (
-      ## download genome.
-      ## if a 'primary assembly' file exists, it means the 'toplevel' files contain alternate chromosomes which will artificially influence multimapping rates, so we want to prioritize primary assemblies if they exist
-      wget -e robots=off -r -N -l1 -nd -A '*.dna.primary_assembly.fa.gz,*.dna.toplevel.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/dna/
-      if [ -f  ${spec^}.*.primary_assembly.fa.gz ]; then
-        rm ${spec^}.*.toplevel.fa.gz
-        zcat ${spec^}.*.primary_assembly.fa.gz > ${spec}_tmp.fa
-      else
-        rm ${spec^}.*.primary_assembly.fa.gz
-        zcat ${spec^}.*.toplevel.fa.gz > ${spec}_tmp.fa
-      fi
-      
-      ## build genome index
-      hisat2-build -p 5 ${spec}_tmp.fa ${spec}_index
-      
-      rm ${spec}_tmp.fa
-  ) &
+  ## download genome.
+  ## if a 'primary assembly' file exists, it means the 'toplevel' files contain alternate chromosomes which will artificially influence multimapping rates, so we want to prioritize primary assemblies if they exist
+  wget -e robots=off -r -N -l1 -nd -A '*.dna.primary_assembly.fa.gz,*.dna.toplevel.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/dna/
+  if [ -f  ${spec^}.*.primary_assembly.fa.gz ]; then
+    rm ${spec^}.*.toplevel.fa.gz
+    zcat ${spec^}.*.primary_assembly.fa.gz > ${spec}_tmp.fa
+  else
+    rm ${spec^}.*.primary_assembly.fa.gz
+    zcat ${spec^}.*.toplevel.fa.gz > ${spec}_tmp.fa
+  fi
+  
+  ## build genome index
+  hisat2-build -p 20 ${spec}_tmp.fa ${spec}_index
+  
+  rm ${spec}_tmp.fa
 
 done
-
-wait
 
 rm -r ncbi_dataset
