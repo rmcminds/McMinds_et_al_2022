@@ -43,9 +43,17 @@ stringtie -p 20 \
 module purge
 module load hub.apps/bedtools/2.30.0
 
+zcat ${ref_dir}/${spec^}_*.fa.gz > ${out_dir}/${spec}/${spec^}_tmp.fa
+head -2 ${out_dir}/${spec}/${spec}_transcripts.gtf > ${out_dir}/${spec}/${spec}_transcripts_named.gtf
+paste $(tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.gtf |
+        awk -F ';' '{print $2}' |
+        awk -F '"' '{print $2}') $(tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.gtf |
+                                   cut -f 2-) |
+awk '$3 == "transcript"' ${out_dir}/${spec}/${spec}_transcripts.gtf >> ${out_dir}/${spec}/${spec}_transcripts_named.gtf
+
 bedtools getfasta \
-  -fi ${ref_dir}/${spec^}_*.fa.gz \
-  -bed ${out_dir}/${spec}/${spec}_transcripts.gtf \
+  -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
+  -bed ${out_dir}/${spec}/${spec}_transcripts_named.gtf \
   -fo ${out_dir}/${spec}_transcripts.fasta
 
 ## build transcriptome index
