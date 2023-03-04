@@ -24,7 +24,7 @@ module load apps/hisat2/2.1.0
 module load apps/samtools/1.3.1
 
 mkdir ${out_dir}/${spec}
-hisat2 -p 20 -x ${spec}_index \
+hisat2 -p 20 -x ${ref_dir}/${spec}_index \
   --dta-cufflinks \
   -1 $(IFS=,; echo "${fwds[*]}") \
   -2 $(IFS=,; echo "${revs[*]}") |
@@ -43,7 +43,10 @@ stringtie -p 20 \
 module purge
 module load hub.apps/bedtools/2.30.0
 
-bedtools getfasta -fi 
+bedtools getfasta \
+  -fi ${ref_dir}/${spec^}_*.fa.gz \
+  -bed ${out_dir}/${spec}/${spec}_transcripts.gtf \
+  -fo ${out_dir}/${spec}_transcripts.fasta
 
 ## build transcriptome index
 module purge
@@ -52,9 +55,9 @@ source /shares/omicshub/apps/anaconda3/etc/profile.d/conda.sh
 conda deactivate
 conda activate salmon
 
-salmon index --index ${spec}_index --transcripts ${spec^}.*.cds.all.fa.gz
+salmon index --index ${out_dir}/${spec}_salmon --transcripts ${out_dir}/${spec}_transcripts.fasta
 
-for fwd in raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; do
+for fwd in ${fwds[@]}; do
 
     # extract sample name from file name
     rev=${fwd%_R1_001.fastq.gz}_R2_001.fastq.gz
@@ -65,7 +68,7 @@ for fwd in raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; 
       sample=${sample%_*}
     done
 
-    salmon quant --index ${ref_dir}/${spec}_index \
+    salmon quant --index ${ref_dir}/${spec}_salmon \
       --threads 20 \
       --libType A \
       -1 ${fwd} \
