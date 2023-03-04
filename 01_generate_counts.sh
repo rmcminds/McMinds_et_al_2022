@@ -6,7 +6,7 @@
 #SBATCH --partition=rra
 #SBATCH --ntasks=20
 #SBATCH --output=outputs/primates_20230224/01_generate_counts/logs/01_generate_counts_%a.log
-#SBATCH --array=0-5
+#SBATCH --array=0-8
 
 species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii daubentonia_madagascariensis lemur_catta sapajus_appella)
 
@@ -16,22 +16,30 @@ ref_dir=outputs/primates_20230224/00_references
 out_dir=outputs/primates_20230224/01_generate_counts
 
 fwds=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz)
+revs=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz)
 
 ## map reads to genome
 module purge
 module load apps/hisat2/2.1.0
+module load apps/samtools/1.3.1
 
 mkdir ${out_dir}/${spec}
-hisat2 -p 20 -x ${spec}_index --dta-cufflinks -1 $(IFS=,; echo "${fwds[*]}") -2 -r2 |
+hisat2 -p 20 -x ${spec}_index \
+  --dta-cufflinks \
+  -1 $(IFS=,; echo "${fwds[*]}") \
+  -2 $(IFS=,; echo "${revs[*]}") |
   samtools view -@ 20 -bS - |
   samtools sort -T ${out_dir}/${spec}/tmp -m 5G -@ 20 - > ${out_dir}/${spec}/${spec}.bam
-
 
 ## create transcriptome from reads and genome
 module purge
 module load apps/stringtie/1.3.4b
 
-stringtie
+stringtie -p 20 \
+  -l ${spec} \
+  -o ${out_dir}/${spec}/${spec}_transcripts.gtf \
+  ${out_dir}/${spec}/${spec}.bam
+
 
 ## build transcriptome index
 module purge

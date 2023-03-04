@@ -30,7 +30,7 @@ module load apps/hisat2/2.1.0
 for i in 0 1 2; do
 
   ## genomes seem to need to be unzipped for hisat2 indexing but can be stored zipped after that
-  zcat ncb_dataset/${ncbiacc[$i]}/*.fna.gz > tmp.fa
+  zcat ncbi_dataset/${ncbiacc[$i]}/*.fna.gz > tmp.fa
 
   ## build genome index
   hisat2-build -p 20 tmp.fa ${ncbispec[$i]}_index
