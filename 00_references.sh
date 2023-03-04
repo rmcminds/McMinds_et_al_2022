@@ -29,10 +29,12 @@ module purge
 module load apps/hisat2/2.1.0
 for i in 0 1 2; do
 
-  cp ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz ${ncbispec[$i]^}_$(basename ncbi_dataset/data/${ncbiacc[$i]}/*.fa.gz)
+  filename=$(basename ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz)
+
+  cp ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz ${ncbispec[$i]^}_${filename/fna.gz/fa.gz}
 
   ## genomes seem to need to be unzipped for hisat2 indexing but can be stored zipped after that
-  zcat ${ncbispec[$i]^}_$(basename ncbi_dataset/data/${ncbiacc[$i]}/*.fa.gz) > tmp.fa
+  zcat ${ncbispec[$i]^}_${filename/fna.gz/fa.gz} > tmp.fa
 
   ## build genome index
   hisat2-build -p 20 tmp.fa ${ncbispec[$i]}_index
