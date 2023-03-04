@@ -6,6 +6,28 @@ focal_gene_names <- c("AKT1", "CASP4", "CASP8", "CCL3", "CCL4", "CD14", "CD69", 
 
 load(file.path(output_prefix,'03a_orthologs_phyr_results_noINLA.RData'))
 
+tlr4 <- unique(ensembl2ext_full$ensembl_gene_id[ensembl2ext_full$external_gene_name == 'TLR4' & grepl('ENSG[[:digit:]]', ensembl2ext_full$ensembl_gene_id)])
+plot(fits[[tlr4]]$dat$body_mass_log_sp_std, log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor, col=fits[[tlr4]]$dat$treatment)
+plot(fits[[tlr4]]$dat$body_mass_log_diff_std, log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor, col=fits[[tlr4]]$dat$treatment)
+plot(body_mass_log_diff_sd * fits[[tlr4]]$dat$body_mass_log_diff_std + body_mass_log_sd * fits[[tlr4]]$dat$body_mass_log_sp_std, log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor, col=fits[[tlr4]]$dat$treatment)
+
+IL1B <- unique(ensembl2ext_full$ensembl_gene_id[ensembl2ext_full$external_gene_name == 'IL1B' & grepl('ENSG[[:digit:]]', ensembl2ext_full$ensembl_gene_id)])
+
+plot(body_mass_log_sd * dat_ortho$body_mass_log_sp_std, log(dat_ortho$count) - dat_ortho$norm_factor, col=dat_ortho$treatment, main='Total immune gene expression', xlab='log body size', ylab='log normalized counts')
+legend(x='topleft',legend=c('Null','LPS'),col=c('black','red'),lty=1)
+
+plot(body_mass_log_sd * dat_ortho$body_mass_log_sp_std, body_mass_log_diff_sd * dat_ortho$body_mass_log_diff_std)
+
+x1 <- (body_mass_log_diff_sd * fits[[tlr4]]$dat$body_mass_log_diff_std)
+x2 <- x1 * (fits[[tlr4]]$dat$treatment == 'LPS')
+y <- (log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor)
+tlr4in <- lm(y~x1+x2)$coefficients[[1]]
+tlr4co1 <- lm(y~x1+x2)$coefficients[[2]]
+tlr4co2 <- lm(y~x1+x2)$coefficients[[3]]
+adjustedtlr4 <- y - (tlr4co1 * x1) - (tlr4co2 * x2)
+plot(body_mass_log_sd * fits[[tlr4]]$dat$body_mass_log_sp_std, adjustedtlr4, col=fits[[tlr4]]$dat$treatment)
+##
+
 # filter out genes that didn't converge
 fitsFilt <- fits[!is.na(sapply(fits,function(x) x$fit))]
 
@@ -157,8 +179,6 @@ legend(x='bottomleft',legend=c('Null','LPS'),col=c('blue','red'),lty=1)
 legend(x='topleft',legend=levels(newdat$species), pch=(1:nlevels(newdat$species)), lty = rep(NULL,nlevels(newdat$species)))
 
 dev.off()
-
-##
 
 
 ## wrangle coefficients for plotting and meta-stats

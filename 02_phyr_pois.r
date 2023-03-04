@@ -1,6 +1,6 @@
 ## modify using logic tested in 05b_run_batches_sparseOU_gp.r to ensure species means are distinct from individual sizes, and other logic therein
 
-nthreads <- 6
+nthreads <- 7
 raw_data_prefix <- path.expand('raw_data/20221215_primate_allometry/')
 output_prefix <- path.expand('outputs/primates_20230224/')
 
@@ -40,11 +40,17 @@ genetrees <- genetrees[!sapply(genetrees,is.null)]
 
 cat('Retrieving ensembl genes\n')
 human_globin_gene_ids <- c('ENSG00000206172', 'ENSG00000188536', 'ENSG00000244734', 'ENSG00000229988', 'ENSG00000223609', 'ENSG00000213931', 'ENSG00000213934', 'ENSG00000196565', 'ENSG00000206177', 'ENSG00000086506', 'ENSG00000130656', 'ENSG00000206178') # https://doi.org/10.1038/s41598-020-62801-6 Table S1
-human_globin_peptide_ids <- biomaRt::getBM(attributes = 'ensembl_peptide_id', 
-                                           filters = 'ensembl_gene_id', 
-                                           values = human_globin_gene_ids, 
-                                           mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', 'hsapiens_gene_ensembl', version='Ensembl Genes 109'), 
-                                           uniqueRows = TRUE)[,1]
+numtries <- 5
+for(i in 1:numtries) {
+  try({
+    human_globin_peptide_ids <- biomaRt::getBM(attributes = 'ensembl_peptide_id', 
+                                             filters = 'ensembl_gene_id', 
+                                             values = human_globin_gene_ids, 
+                                             mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', 'hsapiens_gene_ensembl', version='Ensembl Genes 109'), 
+                                             uniqueRows = TRUE)[,1]
+    break
+  }, silent = FALSE)
+}
 
 globin_trees <- names(genetrees)[sapply(genetrees, \(x) any(human_globin_peptide_ids %in% x$tip.label))]
 tax_globin_peptide_ids <- lapply(names(species_strings), \(x) {
@@ -57,11 +63,16 @@ raw_txi <- lapply(names(species_strings), \(x) {
   cat(paste0('Retrieving ensembl genes for ', x, ' \n'))
   cfiles <- countfiles[grep(x, names(countfiles), ignore.case = TRUE)]
   tnames <- unique(do.call(rbind, lapply(cfiles, read.table, header=TRUE, sep='\t'))$Name)
-  ensembl2ext <- biomaRt::getBM(attributes = c('ensembl_transcript_id_version','ensembl_gene_id','external_gene_name','ensembl_peptide_id','go_id'), 
-                                filters = 'ensembl_transcript_id_version', 
-                                values = tnames, 
-                                mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', martlist[[species_strings[[x]]]], version='Ensembl Genes 109'), 
-                                uniqueRows = TRUE)
+  for(i in 1:numtries) {
+    try({
+    ensembl2ext <- biomaRt::getBM(attributes = c('ensembl_transcript_id_version', 'ensembl_peptide_id', 'ensembl_gene_id', 'external_gene_name', 'go_id'), 
+                                  filters = 'ensembl_transcript_id_version', 
+                                  values = tnames, 
+                                  mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', martlist[[species_strings[[x]]]], version='Ensembl Genes 109'), 
+                                  uniqueRows = TRUE)
+    break
+    }, silent = FALSE)
+  }
   tx2gene <- ensembl2ext[, c('ensembl_transcript_id_version', 'ensembl_gene_id')]
   globins <- ensembl2ext$ensembl_gene_id[ensembl2ext$ensembl_peptide_id %in% tax_globin_peptide_ids[[x]]]
   txi <- tximport::tximport(cfiles, type = 'salmon', tx2gene = tx2gene)
@@ -169,22 +180,48 @@ dat_ortho <- dat_ortho[dat_ortho$individual %in% sample_data_filt$Animal.ID,]
 dat_ortho$body_mass_log_sp_std <- sapply(dat_ortho$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
 dat_ortho$body_mass_log_diff_std <- sapply(dat_ortho$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
 
+## define phyr formula
+phy_formula <- count ~ offset(norm_factor) + body_mass_log_sp_std * treatment + body_mass_log_diff_std + body_mass_log_diff_std:treatment + (1 | individual) + (1 | species__) + (1 | species@treatment) + (1 | species__@treatment)
+
 ## define linear combinations of effects of interest
-lc1 <- INLA::inla.make.lincomb(body_mass_log_sp_std = 1, 'body_mass_log_sp_std:treatmentLPS' = 1)
-names(lc1) = "induced_allometry"
-lc2 <- INLA::inla.make.lincomb(body_mass_log_diff_std = 1, 'treatmentLPS:body_mass_log_diff_std' = 1)
-names(lc2) = "induced_ontology"
+lc1 <- INLA::inla.make.lincomb('body_mass_log_sp_std'              = body_mass_log_sd, 
+                               'body_mass_log_sp_std:treatmentLPS' = body_mass_log_sd) 
+names(lc1) = "induced_evo_allometry"
+
+lc2 <- INLA::inla.make.lincomb('body_mass_log_diff_std'              = body_mass_log_diff_sd, 
+                               'treatmentLPS:body_mass_log_diff_std' = body_mass_log_diff_sd)
+names(lc2) = "induced_intra_allometry"
+
+## scaling by first sd to get both on same scale, then weighting the combination by the variance of each (so if intra-specific size variation is larger than inter-specific size variation, then the intra-specific coefficient dominates)
+lc3 <- INLA::inla.make.lincomb('body_mass_log_diff_std' = body_mass_log_diff_sd^3 / (body_mass_log_diff_sd^2 + body_mass_log_sd^2), 
+                               'body_mass_log_sp_std'   = body_mass_log_sd^3 / (body_mass_log_diff_sd^2 + body_mass_log_sd^2))
+names(lc3) = "overall_allometry"
+
+lc4 <- INLA::inla.make.lincomb('treatmentLPS:body_mass_log_diff_std' = body_mass_log_diff_sd^3 / (body_mass_log_diff_sd^2 + body_mass_log_sd^2), 
+                               'body_mass_log_sp_std:treatmentLPS'   = body_mass_log_sd^3 / (body_mass_log_diff_sd^2 + body_mass_log_sd^2))
+names(lc4) = "overall_allometric_response"
+
+lc5 <- INLA::inla.make.lincomb('body_mass_log_diff_std'              = body_mass_log_diff_sd^3 / (body_mass_log_diff_sd^2 + body_mass_log_sd^2), 
+                               'treatmentLPS:body_mass_log_diff_std' = body_mass_log_diff_sd^3 / (body_mass_log_diff_sd^2 + body_mass_log_sd^2), 
+                               'body_mass_log_sp_std'                = body_mass_log_sd^3 / (body_mass_log_diff_sd^2 + body_mass_log_sd^2), 
+                               'body_mass_log_sp_std:treatmentLPS'   = body_mass_log_sd^3 / (body_mass_log_diff_sd^2 + body_mass_log_sd^2))
+names(lc5) = "induced_overall_allometry"
 
 cat('Modeling immune orthologs\n')
-ortho_immune_res <- phyr::pglmm(count ~ offset(norm_factor) + body_mass_log_sp_std * treatment + body_mass_log_diff_std + body_mass_log_diff_std:treatment + (1 | individual) + (1 | species__) + (1 | species@treatment) + (1 | species__@treatment), family = "poisson", cov_ranef = list(species = species_tree_norm), data=dat_ortho, bayes=TRUE, bayes_options=list(lincomb=c(lc1,lc2)))
+ortho_immune_res <- phyr::pglmm(formula       = phy_formula, 
+                                family        = "poisson", 
+                                cov_ranef     = list(species = species_tree_norm), 
+                                data          = dat_ortho, 
+                                bayes         = TRUE, 
+                                bayes_options = list(lincomb = c(lc1,lc2,lc3,lc4,lc5)))
 ortho_immune_restab <- ortho_immune_res$inla.model$summary.lincomb.derived
 ##
 
-## pool ALL immune-annotated genes
+## pool ALL immune-annotated genes. Should rethink this - go through tree and apply gene names from human reps to all other members of tree for consistency, then pool
 txi_all_immune_pool <- txi_ortho_immune_pool
 txi_all_immune_pool$abundance['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$abundance[rownames(x$abundance) %in% immuneGenes, , drop=FALSE])))
 txi_all_immune_pool$counts['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$counts[rownames(x$counts) %in% immuneGenes, , drop=FALSE])))
-txi_all_immune_pool$length['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$length[rownames(x$length) %in% immuneGenes, , drop=FALSE] * x$abundance[rownames(x$abundance) %in% immuneGenes, , drop=FALSE]))) / txi_all_immune_pool$abundance['immune',]  ## weighted arithmetic mean length
+txi_all_immune_pool$length['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$length[rownames(x$length) %in% immuneGenes, , drop=FALSE] * x$abundance[rownames(x$abundance) %in% immuneGenes, , drop=FALSE]))) / txi_all_immune_pool$abundance['immune',]  ## weighted arithmetic mean length of all immune genes
 
 ## get normalization factors
 des_all_pool <- DESeq2:::DESeqDataSetFromTximport(txi_all_immune_pool, data.frame(Int=rep(1,ncol(txi_all_immune_pool$counts))), ~1)
@@ -201,7 +238,12 @@ dat_all$body_mass_log_sp_std <- sapply(dat_all$individual, function(z) sample_da
 dat_all$body_mass_log_diff_std <- sapply(dat_all$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
 
 cat('Modeling all immune genes\n')
-all_immune_res <- phyr::pglmm(count ~ offset(norm_factor) + body_mass_log_sp_std * treatment + body_mass_log_diff_std + body_mass_log_diff_std:treatment + (1 | individual) + (1 | species__) + (1 | species@treatment) + (1 | species__@treatment), family = "poisson", cov_ranef = list(species = species_tree_norm), data=dat_all, bayes=TRUE, bayes_options=list(lincomb=c(lc1,lc2)))
+all_immune_res <- phyr::pglmm(formula       = phy_formula, 
+                              family        = "poisson", 
+                              cov_ranef     = list(species = species_tree_norm), 
+                              data          = dat_all, 
+                              bayes         = TRUE, 
+                              bayes_options = list(lincomb = c(lc1,lc2,lc3,lc4,lc5)))
 all_immune_restab <- all_immune_res$inla.model$summary.lincomb.derived
 ##
 
@@ -214,7 +256,7 @@ des <- DESeq2::estimateSizeFactors(des)
 
 cat('Fitting models\n')
 fits <- parallel::mclapply(rownames(des), function(x) {
-  cat(round(which(x==rownames(des)) / nrow(des),2) * 100, '%: ', x,'\n')
+  cat(round(which(x == rownames(des)) / nrow(des),2) * 100, '%: ', x,'\n')
   dat <- data.frame(individual  = sapply(strsplit(colnames(DESeq2::counts(des)), '_'), \(x) x[[3]]), 
                     species     = as.factor(sapply(strsplit(colnames(DESeq2::counts(des)), '_'), \(x) paste(tools::toTitleCase(x[1]), x[2], sep='_'))),
                     treatment   = factor(sapply(strsplit(colnames(DESeq2::counts(des)), '_'), \(x) x[[4]]), levels=c('Null','LPS')),
@@ -224,13 +266,19 @@ fits <- parallel::mclapply(rownames(des), function(x) {
   dat$body_mass_log_sp_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
   dat$body_mass_log_diff_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
   
-  if(sd(DESeq2::counts(des)[x,])>0) {
+  if(sd(DESeq2::counts(des)[x,]) > 0) {
 
-    fit <- tryCatch(phyr::pglmm(count ~ offset(norm_factor) + body_mass_log_sp_std * treatment + body_mass_log_diff_std + body_mass_log_diff_std:treatment + (1 | individual) + (1 | species__) + (1 | species@treatment) + (1 | species__@treatment), family = "poisson", cov_ranef = list(species = species_tree_norm), data=dat, bayes=TRUE, bayes_options=list(lincomb=c(lc1,lc2))),
+    fit <- tryCatch(phyr::pglmm(formula       = phy_formula, 
+                                family        = "poisson", 
+                                cov_ranef     = list(species = species_tree_norm), 
+                                data          = dat, 
+                                bayes         = TRUE, 
+                                bayes_options = list(lincomb = c(lc1,lc2,lc3,lc4,lc5))),
                     error = function(e) NA)
     if(!all(is.na(fit))) {
-      coefs <- c(phyr::fixef(fit)$Value, fit$inla.model$summary.lincomb.derived[1:2,'mean'])
-      coef_cis <- rbind(fit$B.ci, LPS_beta=fit$inla.model$summary.lincomb.derived[1:2,c('0.025quant','0.975quant')])
+      coefs <- c(phyr::fixef(fit)$Value, fit$inla.model$summary.lincomb.derived[1:5,'mean'])
+      coef_cis <- rbind(fit$B.ci, LPS_beta = fit$inla.model$summary.lincomb.derived[1:5, c('0.025quant','0.975quant')])
+      fit$inla.model <- NULL
     } else {
       coefs <- NA
       coef_cis <- NA

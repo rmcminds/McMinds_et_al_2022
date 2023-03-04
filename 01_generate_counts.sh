@@ -8,17 +8,40 @@
 #SBATCH --output=outputs/primates_20230224/01_generate_counts/logs/01_generate_counts_%a.log
 #SBATCH --array=0-5
 
-species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii)
+species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii daubentonia_madagascariensis lemur_catta sapajus_appella)
+
 spec=${species[$SLURM_ARRAY_TASK_ID]}
 
 ref_dir=outputs/primates_20230224/00_references
 out_dir=outputs/primates_20230224/01_generate_counts
 
+fwds=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz)
+
+## map reads to genome
+module purge
+module load apps/hisat2/2.1.0
+
+mkdir ${out_dir}/${spec}
+hisat2 -p 20 -x ${spec}_index --dta-cufflinks -1 $(IFS=,; echo "${fwds[*]}") -2 -r2 |
+  samtools view -@ 20 -bS - |
+  samtools sort -T ${out_dir}/${spec}/tmp -m 5G -@ 20 - > ${out_dir}/${spec}/${spec}.bam
+
+
+## create transcriptome from reads and genome
+module purge
+module load apps/stringtie/1.3.4b
+
+stringtie
+
+## build transcriptome index
 module purge
 module load hub.apps/anaconda3/2020.11
 source /shares/omicshub/apps/anaconda3/etc/profile.d/conda.sh
 conda deactivate
 conda activate salmon
+
+salmon index --index ${spec}_index --transcripts ${spec^}.*.cds.all.fa.gz
+
 for fwd in raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; do
 
     # extract sample name from file name

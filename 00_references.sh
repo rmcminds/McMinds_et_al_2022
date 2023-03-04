@@ -5,28 +5,58 @@
 #SBATCH --qos=rra
 #SBATCH --partition=rra
 #SBATCH --ntasks=20
-#SBATCH --output=outputs/primates_20230224/00_references.log
+#SBATCH --output=outputs/primates_20230304/00_references.log
 
 mkdir -p outputs/primates_20230224/00_references
 cd outputs/primates_20230224/00_references
 
-## download ensembl gene trees as flatfile
-wget -N https://ftp.ensembl.org/pub/release-109/emf/ensembl-compara/homologies/Compara.109.protein_default.nh.emf.gz
-
-## extract newick strings from flatfile for later manipulation
-zcat Compara.109.protein_default.nh.emf.gz | grep '^(' > Compara.109.protein_default.newick
+ncbispec=(daubentonia_madagascariensis lemur_catta sapajus_appella)
+ncbiacc=(GCA_023783475.1 GCF_020740605.2 GCF_009761245.1)
 
 module purge
-module load hub.apps/anaconda3/2020.11
-source /shares/omicshub/apps/anaconda3/etc/profile.d/conda.sh
+module load hub.apps/anaconda3
+source activate ncbi_datasets
+
+datasets download genome accession ${ncbiacc[@]} --dehydrated --no-progressbar --include genome
+
+unzip ncbi_dataset.zip
+rm ncbi_dataset.zip
+
+datasets rehydrate --gzip --directory ./
+
 conda deactivate
-conda activate salmon
+module purge
+module load apps/hisat2/2.1.0
+for i in 0 1 2; do
+
+  ## genomes seem to need to be unzipped for hisat2 indexing but can be stored zipped after that
+  zcat ncb_dataset/${ncbiacc[$i]}/*.fna.gz > tmp.fa
+
+  ## build genome index
+  hisat2-build -p 20 tmp.fa ${ncbispec[$i]}_index
+  
+  rm tmp.fa
+
+done
+
 for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii; do
 
-  ## download transcriptome reference
-  wget -e robots=off -r -N -l1 -nd -A '*.cds.all.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/cds/
+  ## download genome.
+  ## if a 'primary assembly' file exists, it means the 'toplevel' files contain alternate chromosomes which will artificially influence multimapping rates, so we want to prioritize primary assemblies if they exist
+  wget -e robots=off -r -N -l1 -nd -A '*.dna.primary_assembly.fa.gz,*.dna.toplevel.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/dna/
+  if [ -f  ${spec^}.*.primary_assembly.fa.gz ]; then
+    zcat ${spec^}.*.primary_assembly.fa.gz > tmp.fa
+  else
+    zcat ${spec^}.*.toplevel.fa.gz > tmp.fa
+  fi
+  
+  ## download genome annotations for later stringtie calculations. looks like stringtie needs this unzipped
+  wget -e robots=off -r -N -l1 -nd -A '*.109.gff3.gz' https://ftp.ensembl.org/pub/release-109/gff3/${spec}/
+  gunzip ${spec^}.*.gff3.gz
 
-  ## build transcriptome index
-  salmon index --index ${spec}_index --transcripts ${spec^}.*.cds.all.fa.gz
+  ## build genome index
+  hisat2-build -p 20 tmp.fa ${spec}_index
+  
+  rm tmp.fa
 
 done
