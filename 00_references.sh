@@ -27,7 +27,7 @@ datasets rehydrate --gzip --directory ./
 conda deactivate
 module purge
 module load apps/hisat2/2.1.0
-for i in 0 1 2; do
+for i in 0 1 2; do &
 
   (
       filename=$(basename ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz)
