@@ -40,6 +40,10 @@ stringtie -p 20 \
   -o ${out_dir}/${spec}/${spec}_transcripts.gtf \
   ${out_dir}/${spec}/${spec}.bam
 
+module purge
+module load hub.apps/bedtools/2.30.0
+
+bedtools getfasta -fi 
 
 ## build transcriptome index
 module purge
