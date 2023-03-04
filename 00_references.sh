@@ -7,8 +7,8 @@
 #SBATCH --ntasks=20
 #SBATCH --output=outputs/primates_20230304/00_references.log
 
-mkdir -p outputs/primates_20230224/00_references
-cd outputs/primates_20230224/00_references
+mkdir -p outputs/primates_20230304/00_references
+cd outputs/primates_20230304/00_references
 
 ncbispec=(daubentonia_madagascariensis lemur_catta sapajus_appella)
 ncbiacc=(GCA_023783475.1 GCF_020740605.2 GCF_009761245.1)
