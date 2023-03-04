@@ -5,15 +5,15 @@
 #SBATCH --qos=rra
 #SBATCH --partition=rra
 #SBATCH --ntasks=20
-#SBATCH --output=outputs/primates_20230224/01_generate_counts/logs/01_generate_counts_%a.log
+#SBATCH --output=outputs/primates_20230304/01_generate_counts/logs/01_generate_counts_%a.log
 #SBATCH --array=0-8
 
 species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii daubentonia_madagascariensis lemur_catta sapajus_appella)
 
 spec=${species[$SLURM_ARRAY_TASK_ID]}
 
-ref_dir=outputs/primates_20230224/00_references
-out_dir=outputs/primates_20230224/01_generate_counts
+ref_dir=outputs/primates_20230304/00_references
+out_dir=outputs/primates_20230304/01_generate_counts
 
 fwds=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz)
 revs=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz)
