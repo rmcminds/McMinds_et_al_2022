@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=01_find_transcripts
-#SBATCH --mem=170G
+#SBATCH --mem=175G
 #SBATCH --time=6-00:00:00
 #SBATCH --qos=rra
 #SBATCH --partition=rra
@@ -31,11 +31,12 @@ hisat2 -p 20 -x ${ref_dir}/${spec}_index \
   -1 $(IFS=,; echo "${fwds[*]}") \
   -2 $(IFS=,; echo "${revs[*]}") |
   samtools view -@ 20 -bS - |
-  samtools sort -T ${out_dir}/${spec}/tmp -m 5G -@ 20 - > ${out_dir}/${spec}/${spec}.bam
+  samtools sort -T ${out_dir}/${spec}/tmp -m 4G -@ 20 - > ${out_dir}/${spec}/${spec}.bam
 
 ## create transcriptome from reads and genome
 module purge
-module load apps/stringtie/1.3.4b
+module load hub.apps/anaconda3/2020.11
+conda activate stringtie_2.2.1
 
 stringtie -p 20 \
   --conservative \
@@ -43,6 +44,7 @@ stringtie -p 20 \
   -o ${out_dir}/${spec}/${spec}_transcripts.gtf \
   ${out_dir}/${spec}/${spec}.bam
 
+conda deactivate
 module purge
 module load hub.apps/bedtools/2.30.0
 
@@ -62,8 +64,10 @@ tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.bed | sort -V -k 4 | awk 'NR==
 
 awk 'NR==FNR {a[$1]++; next} $4 in a' ${out_dir}/${spec}/${spec}_longest.txt ${out_dir}/${spec}/${spec}_transcripts.bed > ${out_dir}/${spec}/${spec}_transcripts_longest.bed
 
+mkdir ${out_dir}/longest
+
 bedtools getfasta \
   -s -name \
   -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
   -bed ${out_dir}/${spec}/${spec}_transcripts_longest.bed \
-  -fo ${out_dir}/${spec}_transcripts_longest.fasta
+  -fo ${out_dir}/longest/${spec^}.fasta
