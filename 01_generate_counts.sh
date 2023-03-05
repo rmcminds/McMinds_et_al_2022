@@ -44,16 +44,19 @@ module purge
 module load hub.apps/bedtools/2.30.0
 
 zcat ${ref_dir}/${spec^}_*.fa.gz > ${out_dir}/${spec}/${spec^}_tmp.fa
-head -2 ${out_dir}/${spec}/${spec}_transcripts.gtf > ${out_dir}/${spec}/${spec}_transcripts_named.gtf
-paste $(tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.gtf |
-        awk -F ';' '{print $2}' |
-        awk -F '"' '{print $2}') $(tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.gtf |
-                                   cut -f 2-) |
-awk '$3 == "transcript"' ${out_dir}/${spec}/${spec}_transcripts.gtf >> ${out_dir}/${spec}/${spec}_transcripts_named.gtf
+## convert gtf to bed while extracting transcript names which can be linked to gene names. bedtools directly from gtf had a single nucleotide difference in start vs bedtools from bed with same numbers, so this is adjusted ($4-1)
+head -2 ${out_dir}/${spec}/${spec}_transcripts.gtf > ${out_dir}/${spec}/${spec}_transcripts.bed
+tail -n +2 ${out_dir}/${spec}/${spec}_transcripts.gtf | awk '$3 == "transcript" {split($0,a,";"); split(a[2],b,"\""); print $1"\t"$4-1"\t"$5"\t"b[2]}' >> ${out_dir}/${spec}/${spec}_transcripts.bed
+
+## find longest trancsript of each gene
+awk '' ${out_dir}/${spec}/${spec}_transcripts.bed > ${out_dir}/${spec}/${spec}_longest.txt
+
+sort -k 4 ${out_dir}/${spec}/${spec}_transcripts.bed | awk 'BEGIN {curgene='initiate'; longest='initiate'; curlen=0} NR>2 {split($4,a,"."); gene=a[1]"."a[2]; len=$3-$2; if(gene != curgene) {curgene=gene; curlen=len; print longest; longest=$4} else if(len > curlen) {longest=$4;curlen=len}} END {print longest}' > ${out_dir}/${spec}/${spec}_longest.txt
 
 bedtools getfasta \
+  -name \
   -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
-  -bed ${out_dir}/${spec}/${spec}_transcripts_named.gtf \
+  -bed ${out_dir}/${spec}/${spec}_transcripts.bed \
   -fo ${out_dir}/${spec}_transcripts.fasta
 
 ## build transcriptome index

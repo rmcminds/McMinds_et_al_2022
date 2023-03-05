@@ -9,7 +9,7 @@ species_strings <- c(Callithrix_jacchus='ENSCJA', Homo_sapiens='ENS', Microcebus
 ## download and normalize species chronogram
 cat('Retrieving cladogram\n')
 species_tree <- datelife::summarize_datelife_result(datelife::get_datelife_result(c('Callithrix jacchus', 'Homo sapiens', 'Macaca mulatta', 'Microcebus murinus', 'Papio anubis', 'Pongo abelii', 'Daubentonia madagascariensis', 'Lemur catta', 'Cebus albifrons')), summary_format='phylo_biggest')
-species_tree$tip.label[species_tree$tip.label == 'Cebus_albifrons'] <- 'Sapajus_apella'
+species_tree$tip.label[species_tree$tip.label == 'Cebus_albifrons'] <- 'Sapajus_appella'
 species_tree_norm <- species_tree
 species_maxtime <- max(phytools::nodeHeights(species_tree_norm))
 species_tree_norm$edge.length <- species_tree_norm$edge.length / species_maxtime
