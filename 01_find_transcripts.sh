@@ -25,6 +25,8 @@ module load apps/samtools/1.3.1
 
 mkdir ${out_dir}/${spec}
 hisat2 -p 20 -x ${ref_dir}/${spec}_index \
+  --no-discordant \
+  --no-mixed \
   --dta-cufflinks \
   -1 $(IFS=,; echo "${fwds[*]}") \
   -2 $(IFS=,; echo "${revs[*]}") |
@@ -47,10 +49,10 @@ module load hub.apps/bedtools/2.30.0
 zcat ${ref_dir}/${spec^}_*.fa.gz > ${out_dir}/${spec}/${spec^}_tmp.fa
 ## convert gtf to bed while extracting transcript names which can be linked to gene names. bedtools directly from gtf had a single nucleotide difference in start vs bedtools from bed with same numbers, so this is adjusted ($4-1)
 head -2 ${out_dir}/${spec}/${spec}_transcripts.gtf > ${out_dir}/${spec}/${spec}_transcripts.bed
-tail -n +2 ${out_dir}/${spec}/${spec}_transcripts.gtf | awk '$3 == "transcript" {split($0,a,";"); split(a[2],b,"\""); print $1"\t"$4-1"\t"$5"\t"b[2]}' >> ${out_dir}/${spec}/${spec}_transcripts.bed
+tail -n +2 ${out_dir}/${spec}/${spec}_transcripts.gtf | awk '$3 == "transcript" {split($0,a,";"); split(a[2],b,"\""); print $1"\t"$4-1"\t"$5"\t"b[2]"\t"$6"\t"$7}' >> ${out_dir}/${spec}/${spec}_transcripts.bed
 
 bedtools getfasta \
-  -name \
+  -s -name \
   -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
   -bed ${out_dir}/${spec}/${spec}_transcripts.bed \
   -fo ${out_dir}/${spec}_transcripts.fasta
@@ -61,12 +63,7 @@ tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.bed | sort -V -k 4 | awk 'NR==
 awk 'NR==FNR {a[$1]++; next} $4 in a' ${out_dir}/${spec}/${spec}_longest.txt ${out_dir}/${spec}/${spec}_transcripts.bed > ${out_dir}/${spec}/${spec}_transcripts_longest.bed
 
 bedtools getfasta \
-  -name \
+  -s -name \
   -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
   -bed ${out_dir}/${spec}/${spec}_transcripts_longest.bed \
   -fo ${out_dir}/${spec}_transcripts_longest.fasta
-
-## extract longest isoforms into a fasta
-## run orthofinder with all our inferred transcripts but also all the ensembl cds files - only keep genes that have at least one human ensembl identifier in their family tree, so that annotations can be applied to entire tree. maybe collapse all within-species clusters of 'genes' into a single gene with multiple transcripts, before identifying putative '1:1' orthologs. shouldn't matter for our case if theres a duplication; we want to know if there are more transcripts. duplications that aren't 'monophyletic' will still be a problem.
-
-## only run salmon on transcripts that have human ensembl family members. don't worry about potential pooling until at the tx2gene step for tximport
