@@ -36,6 +36,9 @@ hisat2 -p 20 -x ${ref_dir}/${spec}_index \
 ## create transcriptome from reads and genome
 module purge
 module load hub.apps/anaconda3/2020.11
+source /shares/omicshub/apps/anaconda3/etc/profile.d/conda.sh
+conda deactivate
+conda deactivate
 conda activate stringtie_2.2.1
 
 stringtie -p 20 \
