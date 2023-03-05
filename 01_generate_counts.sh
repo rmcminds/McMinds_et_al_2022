@@ -49,8 +49,6 @@ head -2 ${out_dir}/${spec}/${spec}_transcripts.gtf > ${out_dir}/${spec}/${spec}_
 tail -n +2 ${out_dir}/${spec}/${spec}_transcripts.gtf | awk '$3 == "transcript" {split($0,a,";"); split(a[2],b,"\""); print $1"\t"$4-1"\t"$5"\t"b[2]}' >> ${out_dir}/${spec}/${spec}_transcripts.bed
 
 ## find longest trancsript of each gene
-awk '' ${out_dir}/${spec}/${spec}_transcripts.bed > ${out_dir}/${spec}/${spec}_longest.txt
-
 sort -k 4 ${out_dir}/${spec}/${spec}_transcripts.bed | awk 'BEGIN {curgene='initiate'; longest='initiate'; curlen=0} NR>2 {split($4,a,"."); gene=a[1]"."a[2]; len=$3-$2; if(gene != curgene) {curgene=gene; curlen=len; print longest; longest=$4} else if(len > curlen) {longest=$4;curlen=len}} END {print longest}' > ${out_dir}/${spec}/${spec}_longest.txt
 
 bedtools getfasta \
@@ -58,6 +56,11 @@ bedtools getfasta \
   -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
   -bed ${out_dir}/${spec}/${spec}_transcripts.bed \
   -fo ${out_dir}/${spec}_transcripts.fasta
+
+## extract longest isoforms into a fasta
+## run orthofinder with all our inferred transcripts but also all the ensembl cds files - only keep genes that have at least one human ensembl identifier in their family tree, so that annotations can be applied to entire tree. maybe collapse all within-species clusters of 'genes' into a single gene with multiple transcripts, before identifying putative '1:1' orthologs. shouldn't matter for our case if theres a duplication; we want to know if there are more transcripts. duplications that aren't 'monophyletic' will still be a problem.
+
+## only run salmon on transcripts that have human ensembl family members. don't worry about potential pooling until at the tx2gene step for tximport
 
 ## build transcriptome index
 module purge
@@ -79,7 +82,7 @@ for fwd in ${fwds[@]}; do
       sample=${sample%_*}
     done
 
-    salmon quant --index ${ref_dir}/${spec}_salmon \
+    salmon quant --index ${out_dir}/${spec}_salmon \
       --threads 20 \
       --libType A \
       -1 ${fwd} \
