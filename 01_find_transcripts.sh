@@ -36,6 +36,7 @@ module purge
 module load apps/stringtie/1.3.4b
 
 stringtie -p 20 \
+  --conservative \
   -l ${spec} \
   -o ${out_dir}/${spec}/${spec}_transcripts.gtf \
   ${out_dir}/${spec}/${spec}.bam
@@ -48,14 +49,22 @@ zcat ${ref_dir}/${spec^}_*.fa.gz > ${out_dir}/${spec}/${spec^}_tmp.fa
 head -2 ${out_dir}/${spec}/${spec}_transcripts.gtf > ${out_dir}/${spec}/${spec}_transcripts.bed
 tail -n +2 ${out_dir}/${spec}/${spec}_transcripts.gtf | awk '$3 == "transcript" {split($0,a,";"); split(a[2],b,"\""); print $1"\t"$4-1"\t"$5"\t"b[2]}' >> ${out_dir}/${spec}/${spec}_transcripts.bed
 
-## find longest trancsript of each gene
-sort -k 4 ${out_dir}/${spec}/${spec}_transcripts.bed | awk 'BEGIN {curgene='initiate'; longest='initiate'; curlen=0} NR>2 {split($4,a,"."); gene=a[1]"."a[2]; len=$3-$2; if(gene != curgene) {curgene=gene; curlen=len; print longest; longest=$4} else if(len > curlen) {longest=$4;curlen=len}} END {print longest}' > ${out_dir}/${spec}/${spec}_longest.txt
-
 bedtools getfasta \
   -name \
   -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
   -bed ${out_dir}/${spec}/${spec}_transcripts.bed \
   -fo ${out_dir}/${spec}_transcripts.fasta
+
+## find longest trancsript of each gene
+tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.bed | sort -V -k 4 | awk 'NR==1 {split($4,a,"."); curgene=a[1]"."a[2]; curlen=$3-$2; longest=$4} NR>1 {split($4,a,"."); gene=a[1]"."a[2]; len=$3-$2; if(gene != curgene) {curgene=gene; curlen=len; print longest; longest=$4} else if(len > curlen) {longest=$4;curlen=len}} END {print longest}' > ${out_dir}/${spec}/${spec}_longest.txt
+
+awk 'NR==FNR {a[$1]++; next} $4 in a' ${out_dir}/${spec}/${spec}_longest.txt ${out_dir}/${spec}/${spec}_transcripts.bed > ${out_dir}/${spec}/${spec}_transcripts_longest.bed
+
+bedtools getfasta \
+  -name \
+  -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
+  -bed ${out_dir}/${spec}/${spec}_transcripts_longest.bed \
+  -fo ${out_dir}/${spec}_transcripts_longest.fasta
 
 ## extract longest isoforms into a fasta
 ## run orthofinder with all our inferred transcripts but also all the ensembl cds files - only keep genes that have at least one human ensembl identifier in their family tree, so that annotations can be applied to entire tree. maybe collapse all within-species clusters of 'genes' into a single gene with multiple transcripts, before identifying putative '1:1' orthologs. shouldn't matter for our case if theres a duplication; we want to know if there are more transcripts. duplications that aren't 'monophyletic' will still be a problem.
