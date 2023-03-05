@@ -4,7 +4,7 @@
 #SBATCH --time=6-00:00:00
 #SBATCH --qos=rra
 #SBATCH --partition=rra
-#SBATCH --ntasks=20
+#SBATCH --ntasks=24
 #SBATCH --output=outputs/primates_20230304/01_find_transcripts/logs/01_find_transcripts_%a.log
 #SBATCH --array=0-8
 
@@ -24,14 +24,14 @@ module load apps/hisat2/2.1.0
 module load apps/samtools/1.3.1
 
 mkdir ${out_dir}/${spec}
-hisat2 -p 20 -x ${ref_dir}/${spec}_index \
+hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   --no-discordant \
   --no-mixed \
   --dta-cufflinks \
   -1 $(IFS=,; echo "${fwds[*]}") \
   -2 $(IFS=,; echo "${revs[*]}") |
-  samtools view -@ 20 -bS - |
-  samtools sort -T ${out_dir}/${spec}/tmp -m 4G -@ 20 - > ${out_dir}/${spec}/${spec}.bam
+  samtools view -@ 24 -bS - |
+  samtools sort -T ${out_dir}/${spec}/tmp -m 6G -@ 24 - > ${out_dir}/${spec}/${spec}.bam
 
 ## create transcriptome from reads and genome
 module purge
@@ -41,7 +41,7 @@ conda deactivate
 conda deactivate
 conda activate stringtie_2.2.1
 
-stringtie -p 20 \
+stringtie -p 24 \
   --conservative \
   -l ${spec} \
   -o ${out_dir}/${spec}/${spec}_transcripts.gtf \
