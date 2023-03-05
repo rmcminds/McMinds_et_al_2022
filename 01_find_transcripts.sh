@@ -4,7 +4,7 @@
 #SBATCH --time=6-00:00:00
 #SBATCH --qos=rra
 #SBATCH --partition=rra
-#SBATCH --ntasks=24
+#SBATCH --ntasks-per-node=24
 #SBATCH --output=outputs/primates_20230304/01_find_transcripts/logs/01_find_transcripts_%a.log
 #SBATCH --array=0-8
 
@@ -66,7 +66,8 @@ bedtools getfasta \
 ## find longest trancsript of each gene
 tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.bed | sort -V -k 4 | awk 'NR==1 {split($4,a,"."); curgene=a[1]"."a[2]; curlen=$3-$2; longest=$4} NR>1 {split($4,a,"."); gene=a[1]"."a[2]; len=$3-$2; if(gene != curgene) {curgene=gene; curlen=len; print longest; longest=$4} else if(len > curlen) {longest=$4;curlen=len}} END {print longest}' > ${out_dir}/${spec}/${spec}_longest.txt
 
-awk 'NR==FNR {a[$1]++; next} $4 in a' ${out_dir}/${spec}/${spec}_longest.txt ${out_dir}/${spec}/${spec}_transcripts.bed > ${out_dir}/${spec}/${spec}_transcripts_longest.bed
+head -2 ${out_dir}/${spec}/${spec}_transcripts.bed > ${out_dir}/${spec}/${spec}_transcripts_longest.bed
+awk 'NR==FNR {a[$1]++; next} $4 in a' ${out_dir}/${spec}/${spec}_longest.txt <(tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.bed) >> ${out_dir}/${spec}/${spec}_transcripts_longest.bed
 
 mkdir ${out_dir}/longest
 

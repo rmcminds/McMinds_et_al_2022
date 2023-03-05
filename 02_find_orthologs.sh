@@ -4,7 +4,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --qos=rra
 #SBATCH --partition=rra
-#SBATCH --ntasks=24
+#SBATCH --ntasks-per-node=24
 #SBATCH --output=outputs/primates_20230304/02_find_orthologs.log
 
 out_dir=outputs/primates_20230304/02_find_orthologs/
@@ -26,7 +26,7 @@ conda deactivate
 conda deactivate
 conda activate orthofinder
 
-orthofinder -t 20 -d -M msa -A mafft -T iqtree \
+orthofinder -t 24 -d -M msa -A mafft -T iqtree \
   -s raw_data/20221215_primate_allometry/primates_ensemblDup.newick \
   -f outputs/primates_20230304/02_find_orthologs/transcripts \
   -o outputs/primates_20230304/02_find_orthologs/of_out
