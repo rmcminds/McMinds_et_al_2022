@@ -24,6 +24,7 @@ module load apps/hisat2/2.1.0
 module load apps/samtools/1.3.1
 
 mkdir ${out_dir}/${spec}
+mkdir -p work/tmp/
 hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   --no-discordant \
   --no-mixed \
@@ -31,7 +32,7 @@ hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   -1 $(IFS=,; echo "${fwds[*]}") \
   -2 $(IFS=,; echo "${revs[*]}") |
   samtools view -@ 24 -bS - |
-  samtools sort -T ${out_dir}/${spec}/tmp -m 6G -@ 24 - > ${out_dir}/${spec}/${spec}.bam
+  samtools sort -T work/tmp/${spec} -m 6G -@ 24 - > ${out_dir}/${spec}/${spec}.bam
 
 ## create transcriptome from reads and genome
 module purge
