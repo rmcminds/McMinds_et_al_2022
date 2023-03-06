@@ -14,8 +14,8 @@ mkdir -p ${out_dir}/peptides
 ## make sure this is 1 per gene, not 1 per transcript
 for i in outputs/primates_20230304/01_find_transcripts/*_longest_peptide_per_gene.pep; do
 newname=$(basename ${i})
-newname=${i/_longest_peptide_per_gene.pep/.fa}
-newname=${i^}
+newname=${newname/_longest_peptide_per_gene.pep/.fa}
+newname=${newname^}
 cp ${i} ${out_dir}/peptides/${newname}
 done
 
