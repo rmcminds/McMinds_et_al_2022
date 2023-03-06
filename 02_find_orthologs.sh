@@ -17,7 +17,7 @@ cp outputs/primates_20230304/01_find_transcripts/*_longest_peptide_per_gene.pep 
 ##download ensembl human cds and add to transcripts folder
 wget https://ftp.ensembl.org/pub/release-109/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz -O ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz
 
-zcat ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz > ${out_dir}/peptides/Homo_sapiens_ensembl.fa
+zcat ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz > ${out_dir}/peptides/Homo_sapiens_ensembl.pep
 rm ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz
 
 module purge
