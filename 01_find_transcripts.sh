@@ -32,7 +32,7 @@ hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   -1 $(IFS=,; echo "${fwds[*]}") \
   -2 $(IFS=,; echo "${revs[*]}") |
   samtools view -@ 24 -bS - |
-  samtools sort -T work/tmp/${spec} -m 6G -@ 24 - > ${out_dir}/${spec}/${spec}.bam
+  samtools sort -T work/tmp/${spec} -m 3G -@ 24 - > ${out_dir}/${spec}/${spec}.bam
 
 ## create transcriptome from reads and genome
 module purge
