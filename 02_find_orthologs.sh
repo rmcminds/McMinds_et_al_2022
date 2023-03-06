@@ -7,6 +7,7 @@
 #SBATCH --ntasks-per-node=24
 #SBATCH --output=outputs/primates_20230304/02_find_orthologs.log
 
+wd=$(pwd)
 out_dir=outputs/primates_20230304/02_find_orthologs/
 
 mkdir -p ${out_dir}/peptides
@@ -19,26 +20,30 @@ for i in outputs/primates_20230304/01_find_transcripts/*_longest_peptide_per_gen
   cp ${i} ${out_dir}/peptides/${newname}
 done
 
-##download ensembl human cds and add to peptides folder
+## download ensembl human cds and add to peptides folder
 mkdir ${out_dir}/ensembl
-wget -N https://ftp.ensembl.org/pub/release-109/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz -O ${out_dir}/ensembl/Homo_sapiens.GRCh38.pep.all.fa.gz
-wget -N https://ftp.ensembl.org/pub/release-109/emf/ensembl-compara/homologies/Compara.109.protein_default.aa.fasta.gz -O ${out_dir}/ensembl/Compara.109.protein_default.aa.fasta.gz
+cd ${out_dir}/ensembl
+
+wget -N https://ftp.ensembl.org/pub/release-109/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz
+wget -N https://ftp.ensembl.org/pub/release-109/emf/ensembl-compara/homologies/Compara.109.protein_default.aa.fasta.gz
+
+cd ${wd}
 
 awk 'NR==FNR
-     {
-       a[$1]++
-       next
-     }
-     NR!=FNR
-     {
-       split($1, b, ".")
-       $1 = b[1]
-       if(">"$1 in a)
        {
-         sub(/\n$/, "")
-         print ">"$0
+         a[$1]++
+         next
        }
-     }' <(zcat ${out_dir}/ensembl/Compara.109.protein_default.aa.fasta.gz | grep 'ENSP[[:digit:]]') RS='(^|\n)>' <(zcat ${out_dir}/ensembl/Homo_sapiens.GRCh38.pep.all.fa.gz) > ${out_dir}/peptides/Homo_sapiens_ensembl.fa
+     NR!=FNR
+       {
+         split($1, b, ".")
+         $1 = b[1]
+         if(">"$1 in a)
+           {
+             sub(/\n$/, "")
+             print ">"$0
+           }
+       }' <(zcat ${out_dir}/ensembl/Compara.109.protein_default.aa.fasta.gz | grep 'ENSP[[:digit:]]') RS='(^|\n)>' <(zcat ${out_dir}/ensembl/Homo_sapiens.GRCh38.pep.all.fa.gz) > ${out_dir}/peptides/Homo_sapiens_ensembl.fa
 
 module purge
 module load hub.apps/anaconda3/2020.11
