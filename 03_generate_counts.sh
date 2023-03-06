@@ -17,9 +17,7 @@ out_dir=outputs/primates_20230304/03_generate_counts
 
 fwds=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz)
 
-## run orthofinder with all our inferred transcripts but also all the ensembl cds files - only keep genes that have at least one human ensembl identifier in their family tree, so that annotations can be applied to entire tree. maybe collapse all within-species clusters of 'genes' into a single gene with multiple transcripts, before identifying putative '1:1' orthologs. shouldn't matter for our case if theres a duplication; we want to know if there are more transcripts. duplications that aren't 'monophyletic' will still be a problem.
-
-## only run salmon on transcripts that have human ensembl family members. don't worry about potential pooling until at the tx2gene step for tximport. use reference genomes in indexing for 'decoys' (might be particularly imiportant since the reference transcripts will be incomplete, so we wouldn't want things looking like they align when they actually came from parts of the genome that aren't in the ref transcripts)
+## run salmon on full stringtie transcripts to ensure all genome locations are available for mapping. then just filter the quantified genes to 1:1 orthologs including the reference human ensembl, identified via orthofinder (and thus implicilty filtering to only protein coding genes). perhaps collapse all putative gene duplicates within a single species because they could be different isoforms of the same gene, and our rough pipeline didn't pick that up?
 
 ## build transcriptome index
 module purge
@@ -28,7 +26,7 @@ source /shares/omicshub/apps/anaconda3/etc/profile.d/conda.sh
 conda deactivate
 conda activate salmon
 
-salmon index --index ${out_dir}/${spec}_salmon --transcripts ${out_dir}/${spec}_transcripts.fasta
+salmon index --index ${out_dir}/${spec}_salmon_index --transcripts ${in_dir}/${spec}_transcripts.fasta
 
 for fwd in ${fwds[@]}; do
 
@@ -41,7 +39,7 @@ for fwd in ${fwds[@]}; do
       sample=${sample%_*}
     done
 
-    salmon quant --index ${out_dir}/${spec}_salmon \
+    salmon quant --index ${out_dir}/${spec}_salmon_index \
       --threads 20 \
       --libType A \
       -1 ${fwd} \

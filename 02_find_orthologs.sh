@@ -9,15 +9,16 @@
 
 out_dir=outputs/primates_20230304/02_find_orthologs/
 
-mkdir -p ${out_dir}/transcripts
+mkdir -p ${out_dir}/peptides
 
-cp outputs/primates_20230304/01_find_transcripts/longest/* ${out_dir}/transcripts
+## make sure this is 1 per gene, not 1 per transcript
+cp outputs/primates_20230304/01_find_transcripts/*_longest_peptide_per_gene.pep ${out_dir}/peptides
 
 ##download ensembl human cds and add to transcripts folder
-wget -e robots=off -r -N -l1 -nd  https://ftp.ensembl.org/pub/release-109/fasta/Homo_sapiens/cds/    Homo_sapiens.GRCh38.cds.all.fa.gz -O outputs/primates_20230304/02_find_orthologs/transcripts/Homo_sapiens.GRCh38.cds.all.fa.gz
+wget -e robots=off -r -N -l1 -nd  https://ftp.ensembl.org/pub/release-109/fasta/Homo_sapiens/pep/    Homo_sapiens.GRCh38.pep.all.fa.gz -O ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz
 
-zcat outputs/primates_20230304/02_find_orthologs/transcripts/Homo_sapiens.GRCh38.cds.all.fa.gz > outputs/primates_20230304/02_find_orthologs/transcripts/Homo_sapiens_ensembl.fa
-rm outputs/primates_20230304/02_find_orthologs/transcripts/Homo_sapiens.GRCh38.cds.all.fa.gz
+zcat ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz > ${out_dir}/peptides/Homo_sapiens_ensembl.fa
+rm ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz
 
 module purge
 module load hub.apps/anaconda3/2020.11
@@ -26,10 +27,9 @@ conda deactivate
 conda deactivate
 conda activate orthofinder
 
-orthofinder -t 24 -d -M msa -A mafft -T iqtree \
+## run orthofinder with all transdecoder longest isoform peptides, plus ensembl human peptides for annotation
+
+orthofinder -t 24 -M msa -A mafft -T iqtree \
   -s raw_data/20221215_primate_allometry/primates_ensemblDup.newick \
-  -f outputs/primates_20230304/02_find_orthologs/transcripts \
-  -o outputs/primates_20230304/02_find_orthologs/of_out
-
-## run orthofinder with all our inferred transcripts but also all the ensembl cds files - only keep genes that have at least one human ensembl identifier in their family tree, so that annotations can be applied to entire tree. maybe collapse all within-species clusters of 'genes' into a single gene with multiple transcripts, before identifying putative '1:1' orthologs. shouldn't matter for our case if theres a duplication; we want to know if there are more transcripts. duplications that aren't 'monophyletic' will still be a problem.
-
+  -f ${out_dir}/peptides \
+  -o ${out_dir}/of_out

@@ -55,4 +55,12 @@ gtf_genome_to_cdna_fasta.pl ${out_dir}/${spec}_transcripts.gtf <(zcat ${ref_dir}
 
 gtf_to_alignment_gff3.pl ${out_dir}/${spec}_transcripts.gtf > ${out_dir}/${spec}_transcripts.gff3
 
-TransDecoder.LongOrfs -t ${out_dir}/${spec}_transcripts.fa --output_dir ${out_dir}/${spec}_transdecoder
+TransDecoder.LongOrfs -S -t ${out_dir}/${spec}_transcripts.fa --output_dir ${out_dir}/${spec}_transdecoder
+
+cd ${out_dir}
+TransDecoder.Predict -t ${spec}_transcripts.fa --single_best_only --output_dir ${spec}_transdecoder
+
+## filter peptides by longest isoform per gene
+grep '^>' ${spec}_transcripts.fa.transdecoder.pep | sort -V -k 1,1 | awk 'NR==1 {split($5,a,":"); curlen=a[2]; split($1,b,"."); curgene=b[1]"."b[2]; sub(">","",$1); longest=$1} NR>1 {split($5,a,":"); curlen=a[2]; split($1,b,"."); gene=b[1]"."b[2]; if(gene != curgene) {curgene=gene; curlen=len; print longest; sub(">","",$1); longest=$1} else if(len > curlen) {sub(">","",$1); longest=$1; curlen=len}} END {print longest}' > ${spec}_longest_transcript_per_gene.txt
+
+awk 'NR==FNR {a[$1]++; next} $1 in a {sub(/\n$/, ""); print ">"$0}' ${spec}_longest_transcript_per_gene.txt RS='(^|\n)>' ${spec}_transcripts.fa.transdecoder.pep > ${spec}_longest_peptide_per_gene.pep
