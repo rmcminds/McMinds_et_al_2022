@@ -20,10 +20,11 @@ cp ${i} ${out_dir}/peptides/${newname}
 done
 
 ##download ensembl human cds and add to transcripts folder
-wget https://ftp.ensembl.org/pub/release-109/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz -O ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz
+mkdir ${out_dir}/ensembl
+wget https://ftp.ensembl.org/pub/release-109/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz -O ${out_dir}/ensembl/Homo_sapiens.GRCh38.pep.all.fa.gz
+wget https://ftp.ensembl.org/pub/release-109/emf/ensembl-compara/homologies/Compara.109.protein_default.aa.fasta.gz -O ${out_dir}/ensembl/Compara.109.protein_default.aa.fasta.gz
 
-zcat ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz > ${out_dir}/peptides/Homo_sapiens_ensembl.fa
-rm ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz
+awk 'NR==FNR {a[$1]++; next} {split($1,".",b); $1 = b[1]; if($1 in a) {sub(/\n$/, ""); print ">"$0}}' <(zcat ${out_dir}/ensembl/Compara.109.protein_default.aa.fasta.gz | grep 'ENSP[[:digit:]]') RS='(^|\n)>' <(zcat ${out_dir}/ensembl/Homo_sapiens.GRCh38.pep.all.fa.gz) > ${out_dir}/peptides/Homo_sapiens_ensembl.fa
 
 module purge
 module load hub.apps/anaconda3/2020.11
