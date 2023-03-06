@@ -12,7 +12,7 @@ out_dir=outputs/primates_20230304/02_find_orthologs/
 
 mkdir -p ${out_dir}/peptides
 
-## make sure this is 1 per gene, not 1 per transcript
+## copy seqs into directory with clean filenames
 for i in outputs/primates_20230304/01_find_transcripts/*_longest_peptide_per_gene.pep; do
   newname=$(basename ${i})
   newname=${newname/_longest_peptide_per_gene.pep/.fa}
@@ -29,21 +29,18 @@ wget -N https://ftp.ensembl.org/pub/release-109/emf/ensembl-compara/homologies/C
 
 cd ${wd}
 
-awk 'NR==FNR
-       {
-         a[$1]++
-         next
+## keep only the reference peptides that ensembl uses for their gene trees. Could also just not use the Homo_sapiens file and extract from alignment, but then would want to remove alignment dashes
+awk 'NR == FNR {
+       a[$1]++
+       next
+     }
+     NR != FNR {
+       split($1, b, ".")
+       if(">"b[1] in a) {
+         sub(/\n$/, "")
+         print ">"$0
        }
-     NR!=FNR
-       {
-         split($1, b, ".")
-         $1 = b[1]
-         if(">"$1 in a)
-           {
-             sub(/\n$/, "")
-             print ">"$0
-           }
-       }' <(zcat ${out_dir}/ensembl/Compara.109.protein_default.aa.fasta.gz | grep 'ENSP[[:digit:]]') RS='(^|\n)>' <(zcat ${out_dir}/ensembl/Homo_sapiens.GRCh38.pep.all.fa.gz) > ${out_dir}/peptides/Homo_sapiens_ensembl.fa
+     }' <(zcat ${out_dir}/ensembl/Compara.109.protein_default.aa.fasta.gz | grep 'ENSP[[:digit:]]') RS='(^|\n)>' <(zcat ${out_dir}/ensembl/Homo_sapiens.GRCh38.pep.all.fa.gz) > ${out_dir}/peptides/Homo_ensembl.fa
 
 module purge
 module load hub.apps/anaconda3/2020.11
