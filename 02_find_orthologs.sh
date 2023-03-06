@@ -22,7 +22,7 @@ done
 ##download ensembl human cds and add to transcripts folder
 wget https://ftp.ensembl.org/pub/release-109/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz -O ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz
 
-zcat ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz > ${out_dir}/peptides/Homo_sapiens_ensembl.pep
+zcat ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz > ${out_dir}/peptides/Homo_sapiens_ensembl.fa
 rm ${out_dir}/peptides/Homo_sapiens.GRCh38.pep.all.fa.gz
 
 module purge
@@ -34,7 +34,7 @@ conda activate orthofinder
 
 ## run orthofinder with all transdecoder longest isoform peptides, plus ensembl human peptides for annotation
 
-orthofinder -t 24 -M msa -A mafft -T 'iqtree -nt' \
+orthofinder -t 24 -M msa -A mafft -T iqtree \
   -s raw_data/20221215_primate_allometry/primates_ensemblDup.newick \
   -f ${out_dir}/peptides \
   -o ${out_dir}/of_out
