@@ -63,40 +63,35 @@ TransDecoder.Predict -t ${spec}_transcripts.fa --single_best_only --output_dir $
 ## find longest isoform per gene
 grep '^>' ${spec}_transcripts.fa.transdecoder.pep |
 sort -V -k 1,1 |
-awk 'NR == 1
-      {
-        split($5, a, ":")
-        curlen = a[2]
-        split($1, b, ".")
-        curgene = b[1]"."b[2]
+awk 'NR == 1 {
+      split($5, a, ":")
+      curlen = a[2]
+      split($1, b, ".")
+      curgene = b[1]"."b[2]
+      sub(">", "", $1)
+      longest = $1
+    }
+    NR > 1 {
+      split($5, a, ":")
+      curlen = a[2]
+      split($1, b, ".")
+      gene = b[1]"."b[2]
+      if(gene != curgene) {
+        curgene = gene
+        curlen = len
+        print longest
         sub(">", "", $1)
         longest = $1
       }
-    NR > 1
-      {
-        split($5, a, ":")
-        curlen = a[2]
-        split($1, b, ".")
-        gene = b[1]"."b[2]
-        if(gene != curgene)
-          {
-            curgene = gene
-            curlen = len
-            print longest
-            sub(">", "", $1)
-            longest = $1
-          }
-        else if(len > curlen)
-          {
-            sub(">", "", $1)
-            longest = $1
-            curlen = len
-          }
+      else if(len > curlen) {
+        sub(">", "", $1)
+        longest = $1
+        curlen = len
       }
-    END
-      {
-        print longest
-      }' > ${spec}_longest_transcript_per_gene.txt
+    }
+    END {
+      print longest
+    }' > ${spec}_longest_transcript_per_gene.txt
 
 ## filter fasta to only keep longest isoforms
 awk 'NR == FNR {
