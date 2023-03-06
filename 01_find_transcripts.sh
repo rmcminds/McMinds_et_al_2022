@@ -23,7 +23,6 @@ module purge
 module load apps/hisat2/2.1.0
 module load apps/samtools/1.3.1
 
-mkdir ${out_dir}/${spec}
 mkdir -p work/tmp/
 hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   --no-discordant \
@@ -31,8 +30,8 @@ hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   --dta-cufflinks \
   -1 $(IFS=,; echo "${fwds[*]}") \
   -2 $(IFS=,; echo "${revs[*]}") |
-  samtools view -@ 24 -bS - |
-  samtools sort -T work/tmp/${spec} -m 3G -@ 24 - > ${out_dir}/${spec}/${spec}.bam
+  samtools view -@ 4 -bS - |
+  samtools sort -T work/tmp/${spec} -m 7G -@ 4 - > ${out_dir}/${spec}.bam
 
 ## create transcriptome from reads and genome
 module purge
@@ -45,34 +44,15 @@ conda activate stringtie_2.2.1
 stringtie -p 24 \
   --conservative \
   -l ${spec} \
-  -o ${out_dir}/${spec}/${spec}_transcripts.gtf \
-  ${out_dir}/${spec}/${spec}.bam
+  -o ${out_dir}/${spec}_transcripts.gtf \
+  ${out_dir}/${spec}.bam
 
+## predict coding and protein sequences from transcripts
 conda deactivate
-module purge
-module load hub.apps/bedtools/2.30.0
+conda activate transdecoder
 
-zcat ${ref_dir}/${spec^}_*.fa.gz > ${out_dir}/${spec}/${spec^}_tmp.fa
-## convert gtf to bed while extracting transcript names which can be linked to gene names. bedtools directly from gtf had a single nucleotide difference in start vs bedtools from bed with same numbers, so this is adjusted ($4-1)
-head -2 ${out_dir}/${spec}/${spec}_transcripts.gtf > ${out_dir}/${spec}/${spec}_transcripts.bed
-tail -n +2 ${out_dir}/${spec}/${spec}_transcripts.gtf | awk '$3 == "transcript" {split($0,a,";"); split(a[2],b,"\""); print $1"\t"$4-1"\t"$5"\t"b[2]"\t"$6"\t"$7}' >> ${out_dir}/${spec}/${spec}_transcripts.bed
+gtf_genome_to_cdna_fasta.pl ${out_dir}/${spec}_transcripts.gtf <(zcat ${ref_dir}/${spec^}.*.fa.gz) > ${out_dir}/${spec}_transcripts.fa
 
-bedtools getfasta \
-  -s -name \
-  -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
-  -bed ${out_dir}/${spec}/${spec}_transcripts.bed \
-  -fo ${out_dir}/${spec}_transcripts.fasta
+gtf_to_alignment_gff3.pl ${out_dir}/${spec}_transcripts.gtf > ${out_dir}/${spec}_transcripts.gff3
 
-## find longest trancsript of each gene
-tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.bed | sort -V -k 4 | awk 'NR==1 {split($4,a,"."); curgene=a[1]"."a[2]; curlen=$3-$2; longest=$4} NR>1 {split($4,a,"."); gene=a[1]"."a[2]; len=$3-$2; if(gene != curgene) {curgene=gene; curlen=len; print longest; longest=$4} else if(len > curlen) {longest=$4;curlen=len}} END {print longest}' > ${out_dir}/${spec}/${spec}_longest.txt
-
-head -2 ${out_dir}/${spec}/${spec}_transcripts.bed > ${out_dir}/${spec}/${spec}_transcripts_longest.bed
-awk 'NR==FNR {a[$1]++; next} $4 in a' ${out_dir}/${spec}/${spec}_longest.txt <(tail -n +3 ${out_dir}/${spec}/${spec}_transcripts.bed) >> ${out_dir}/${spec}/${spec}_transcripts_longest.bed
-
-mkdir ${out_dir}/longest
-
-bedtools getfasta \
-  -s -name \
-  -fi ${out_dir}/${spec}/${spec^}_tmp.fa \
-  -bed ${out_dir}/${spec}/${spec}_transcripts_longest.bed \
-  -fo ${out_dir}/longest/${spec^}.fasta
+TransDecoder.LongOrfs -t ${out_dir}/${spec}_transcripts.fa --output_dir ${out_dir}/${spec}_transdecoder

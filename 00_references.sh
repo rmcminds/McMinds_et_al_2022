@@ -31,10 +31,10 @@ for i in 0 1 2; do
 
   filename=$(basename ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz)
 
-  cp ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz ${ncbispec[$i]^}_${filename/fna.gz/fa.gz}
+  cp ncbi_dataset/data/${ncbiacc[$i]}/*.fna.gz ${ncbispec[$i]^}.${filename/fna.gz/fa.gz}
 
   ## genomes seem to need to be unzipped for hisat2 indexing but can be stored zipped after that
-  zcat ${ncbispec[$i]^}_${filename/fna.gz/fa.gz} > ${ncbispec[$i]}_tmp.fa
+  zcat ${ncbispec[$i]^}.${filename/fna.gz/fa.gz} > ${ncbispec[$i]}_tmp.fa
 
   ## build genome index
   hisat2-build -p 20 ${ncbispec[$i]}_tmp.fa ${ncbispec[$i]}_index
