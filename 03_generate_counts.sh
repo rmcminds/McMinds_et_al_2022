@@ -26,7 +26,7 @@ source /shares/omicshub/apps/anaconda3/etc/profile.d/conda.sh
 conda deactivate
 conda activate salmon
 
-salmon index --index ${out_dir}/${spec}_salmon_index --transcripts ${in_dir}/${spec}_transcripts.fasta
+salmon index --index ${out_dir}/${spec}_salmon_index --transcripts ${in_dir}/${spec}_transcripts.fa
 
 for fwd in ${fwds[@]}; do
 
