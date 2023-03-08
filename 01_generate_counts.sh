@@ -1,18 +1,18 @@
 #!/bin/bash
-#SBATCH --job-name=01_generate_counts
+#SBATCH --job-name=01_generate_counts_ensembl
 #SBATCH --mem=170G
 #SBATCH --time=6-00:00:00
 #SBATCH --qos=rra
 #SBATCH --partition=rra
 #SBATCH --ntasks=20
-#SBATCH --output=outputs/primates_20230224/01_generate_counts/logs/01_generate_counts_%a.log
+#SBATCH --output=outputs/primates_20230308_ensembl/01_generate_counts/logs/01_generate_counts_%a.log
 #SBATCH --array=0-5
 
 species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii)
 spec=${species[$SLURM_ARRAY_TASK_ID]}
 
-ref_dir=outputs/primates_20230224/00_references
-out_dir=outputs/primates_20230224/01_generate_counts
+ref_dir=outputs/primates_20230308_ensembl/00_references
+out_dir=outputs/primates_20230308_ensembl/01_generate_counts
 
 module purge
 module load hub.apps/anaconda3/2020.11

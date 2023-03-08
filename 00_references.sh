@@ -1,14 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=00_references
+#SBATCH --job-name=00_references_ensembl
 #SBATCH --mem=170G
 #SBATCH --time=6-00:00:00
 #SBATCH --qos=rra
 #SBATCH --partition=rra
 #SBATCH --ntasks=20
-#SBATCH --output=outputs/primates_20230224/00_references.log
+#SBATCH --output=outputs/primates_20230308_ensembl/00_references_ensembl.log
 
-mkdir -p outputs/primates_20230224/00_references
-cd outputs/primates_20230224/00_references
+mkdir -p outputs/primates_20230308_ensembl/00_references
+cd outputs/primates_20230308_ensembl/00_references
 
 ## download ensembl gene trees as flatfile
 wget -N https://ftp.ensembl.org/pub/release-109/emf/ensembl-compara/homologies/Compara.109.protein_default.nh.emf.gz
@@ -24,9 +24,10 @@ conda activate salmon
 for spec in callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii; do
 
   ## download transcriptome reference
-  wget -e robots=off -r -N -l1 -nd -A '*.cds.all.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/cds/
+  wget -e robots=off -r -N -l1 -nd -A '*.cdna.all.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/cdna/
 
   ## build transcriptome index
-  salmon index --index ${spec}_index --transcripts ${spec^}.*.cds.all.fa.gz
+  salmon index --index ${spec}_index --transcripts ${spec^}.*.cdna.all.fa.gz
 
 done
+

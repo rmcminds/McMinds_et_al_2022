@@ -1,14 +1,13 @@
-## modify using logic tested in 05b_run_batches_sparseOU_gp.r to ensure species means are distinct from individual sizes, and other logic therein
 
 nthreads <- 6
 raw_data_prefix <- path.expand('raw_data/20221215_primate_allometry/')
-output_prefix <- path.expand('outputs/primates_20230224/')
+output_prefix <- path.expand('outputs/primates_20230308_ensembl/')
 
 species_strings <- c(Callithrix_jacchus='ENSCJA', Homo_sapiens='ENS', Microcebus_murinus='ENSMIC', Macaca_mulatta='ENSMMU', Papio_anubis='ENSPAN', Pongo_abelii='ENSPPY')
 
-## download and normalize species chronogram
+## import species tree
 cat('Retrieving cladogram\n')
-species_tree <- datelife::summarize_datelife_result(datelife::get_datelife_result(c('Callithrix jacchus', 'Homo sapiens', 'Macaca mulatta', 'Microcebus murinus', 'Papio anubis', 'Pongo abelii')), summary_format='phylo_biggest')
+species_tree <- ape::read.tree(file.path(raw_data_prefix, 'primates_6sp.newick'))
 
 species_tree_norm <- species_tree
 species_maxtime <- max(phytools::nodeHeights(species_tree_norm))
