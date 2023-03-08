@@ -1,4 +1,3 @@
-## modify using logic tested in 05b_run_batches_sparseOU_gp.r to ensure species means are distinct from individual sizes, and other logic therein
 
 nthreads <- 7
 raw_data_prefix <- path.expand('raw_data/20221215_primate_allometry/')
