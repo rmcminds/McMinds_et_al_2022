@@ -51,9 +51,9 @@ conda activate orthofinder
 
 ## run orthofinder with all transdecoder longest isoform peptides, plus ensembl human peptides for annotation
 
-orthofinder -t 24 -M msa -A mafft -T iqtree -I 0.5 \
+orthofinder -t 24 \
   -s raw_data/20221215_primate_allometry/primates_ensemblDup.newick \
   -f ${out_dir}/peptides \
   -o ${out_dir}/of_out
 
-## creates at least 650,000 files, which is the limit on RRA. Also might not cluster some that should be - could lowering the -I option to 0.5 be a practical solution to fewer orthogroups and files? will still use my own tree traversal to find orthologs within the tree, so lumping shouldn't really be a problem?
+## trying to do all trees with MSAs and iqtree creates at least 650,000 files, which is past the limit on RRA.
