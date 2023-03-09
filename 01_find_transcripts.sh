@@ -15,9 +15,6 @@ spec=${species[$SLURM_ARRAY_TASK_ID]}
 ref_dir=outputs/primates_20230309_all/00_references
 out_dir=outputs/primates_20230309_all/01_find_transcripts
 
-fwds=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz)
-revs=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz)
-
 mkdir -p work/tmp/
 
 module purge
@@ -38,8 +35,8 @@ hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   --no-discordant \
   --no-mixed \
   --dta-cufflinks \
-  -1 work/tmp/${spec}_unassembled_R1.f1.gz \
-  -2 work/tmp/${spec}_unassembled_R1.f1.gz \
+  -1 work/tmp/${spec}_unassembled_R1.fq.gz \
+  -2 work/tmp/${spec}_unassembled_R2.fq.gz \
   -U work/tmp/${spec}_superreads.fastq |
   samtools view -@ 4 -bS - > work/tmp/${spec}_unsorted.bam
 
