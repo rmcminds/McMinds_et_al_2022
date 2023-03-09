@@ -216,6 +216,51 @@ ortho_immune_res <- phyr::pglmm(formula       = phy_formula,
 ortho_immune_restab <- ortho_immune_res$inla.model$summary.lincomb.derived
 ##
 
+
+sensors <- unique(ensembl2ext$ensembl_gene_id[ensembl2ext$module == 'sensor'])
+effectors <- unique(ensembl2ext$ensembl_gene_id[ensembl2ext$module == 'effector'])
+bureaucracy <- unique(ensembl2ext$ensembl_gene_id[!ensembl2ext$module %in% c('sensor','effector','no_module_annotation')])
+
+## pool immune-annotated 1:1 orthologous genes
+geneGroups <- rownames(txi_ortho$abundance)
+geneGroups[geneGroups %in% sensors] <- 'sensor'
+geneGroups[geneGroups %in% effectors] <- 'effector'
+geneGroups[geneGroups %in% bureaucracy] <- 'bureaucracy'
+
+txi_modules_pool <- txi_ortho
+txi_modules_pool$abundance <- rowsum(txi_ortho$abundance, geneGroups)
+txi_modules_pool$counts <- rowsum(txi_ortho$counts, geneGroups)
+txi_modules_pool$length <- rowsum(txi_ortho$abundance * txi_ortho$length, geneGroups) / txi_modules_pool$abundance ## weighted arithmetic mean length
+txi_modules_pool$length[!rownames(txi_modules_pool$length) %in% c('sensor','effector','bureaucracy'),] <- txi_ortho$length[rownames(txi_modules_pool$length)[!rownames(txi_modules_pool$length) %in% c('sensor','effector','bureaucracy')],]
+
+## get normalization factors
+des_modules_pool <- DESeq2:::DESeqDataSetFromTximport(txi_modules_pool, data.frame(Int=rep(1,ncol(txi_modules_pool$counts))), ~1)
+des_modules_pool <- DESeq2::estimateSizeFactors(des_modules_pool)
+
+module_fits <- lapply(c('sensor','effector','bureaucracy'), function(x) {
+## model total differential expression of immune genes
+  dat <- data.frame(individual  = sapply(strsplit(colnames(DESeq2::counts(des_modules_pool)), '_'), \(x) x[[3]]), 
+                    species     = as.factor(sapply(strsplit(colnames(DESeq2::counts(des_modules_pool)), '_'), \(x) paste(tools::toTitleCase(x[1]), x[2], sep='_'))),
+                    treatment   = factor(sapply(strsplit(colnames(DESeq2::counts(des_modules_pool)), '_'), \(x) x[[4]]), levels=c('Null','LPS')),
+                    norm_factor = log(DESeq2::normalizationFactors(des_modules_pool)[x,]),
+                    count       = DESeq2::counts(des_modules_pool)[x,])
+  dat <- dat[dat$individual %in% sample_data_filt$Animal.ID,]
+  dat$body_mass_log_sp_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
+  dat$body_mass_log_diff_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
+  levels(dat$species)[levels(dat$species) == 'Sapajus_appella'] <- 'Sapajus_apella'
+  
+  res <- phyr::pglmm(formula       = phy_formula, 
+                     family        = "poisson", 
+                     cov_ranef     = list(species = species_tree_norm), 
+                     data          = dat, 
+                     bayes         = TRUE, 
+                     bayes_options = list(lincomb = c(lc1,lc2,lc3,lc4,lc5)))
+  restab <- res$inla.model$summary.lincomb.derived
+  
+  return(list(dat=dat, res=res, restab=restab))
+
+})
+
 ## pool ALL immune-annotated genes
 txi_all_immune_pool <- txi_ortho_immune_pool
 txi_all_immune_pool$abundance['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$abundance[rownames(x$abundance) %in% immuneGenes, , drop=FALSE])))
