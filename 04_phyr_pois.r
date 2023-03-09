@@ -3,12 +3,12 @@ nthreads <- 7
 raw_data_prefix <- path.expand('raw_data/20221215_primate_allometry/')
 output_prefix <- path.expand('outputs/primates_20230304/')
 
+data_species <- c('Callithrix_jacchus', 'Daubentonia_madagascariensis', 'Homo_sapiens', 'Lemur_catta', 'Macaca_mulatta', 'Microcebus_murinus', 'Papio_anubis', 'Pongo_abelii', 'Sapajus_appella')
+
 species_strings <- c(Callithrix_jacchus='ENSCJA', Homo_sapiens='ENS', Microcebus_murinus='ENSMIC', Macaca_mulatta='ENSMMU', Papio_anubis='ENSPAN', Pongo_abelii='ENSPPY')
 
-## download and normalize species chronogram
-cat('Retrieving cladogram\n')
-species_tree <- datelife::summarize_datelife_result(datelife::get_datelife_result(c('Callithrix jacchus', 'Homo sapiens', 'Macaca mulatta', 'Microcebus murinus', 'Papio anubis', 'Pongo abelii', 'Daubentonia madagascariensis', 'Lemur catta', 'Cebus albifrons')), summary_format='phylo_biggest')
-species_tree$tip.label[species_tree$tip.label == 'Cebus_albifrons'] <- 'Sapajus_appella'
+cat('Importing cladogram\n')
+species_tree <- ape::read.tree(file.path(raw_data_prefix, 'primates.newick'))
 species_tree_norm <- species_tree
 species_maxtime <- max(phytools::nodeHeights(species_tree_norm))
 species_tree_norm$edge.length <- species_tree_norm$edge.length / species_maxtime
@@ -25,17 +25,10 @@ sample_data$genus_species <- paste(sample_data$Genus, sample_data$Species, sep='
 ##
 
 ## import counts
-countfiles <- Sys.glob(file.path(output_prefix, '/01_generate_counts/*/quant.sf'))
+countfiles <- Sys.glob(file.path(output_prefix, '/03_generate_counts/*/quant.sf'))
 samples <- sapply(basename(dirname(countfiles)), \(x) paste(strsplit(x,'_')[[1]][3:4], collapse='_'))
 names(countfiles) <- names(samples)
 sample_data_filt <- sample_data[sample_data$Animal.ID %in% sub('_.*', '', samples),]
-
-martlist <- list(ENSCJA='cjacchus_gene_ensembl', ENS='hsapiens_gene_ensembl', ENSMIC='mmurinus_gene_ensembl', ENSMMU='mmulatta_gene_ensembl', ENSPAN='panubis_gene_ensembl', ENSPPY='pabelii_gene_ensembl')
-
-genetrees <- ape::read.tree(file.path(output_prefix, '00_references/Compara.109.protein_default.newick'))
-names(genetrees) <- paste('family', 1:length(genetrees), sep='_') ## arbitrary gene family names
-genetrees <- lapply(genetrees, \(x) ape::keep.tip(x, grep(paste(paste0(species_strings,'P[[:digit:]]'),collapse='|'), x$tip.label)))
-genetrees <- genetrees[!sapply(genetrees,is.null)]
 
 cat('Retrieving ensembl genes\n')
 human_globin_gene_ids <- c('ENSG00000206172', 'ENSG00000188536', 'ENSG00000244734', 'ENSG00000229988', 'ENSG00000223609', 'ENSG00000213931', 'ENSG00000213934', 'ENSG00000196565', 'ENSG00000206177', 'ENSG00000086506', 'ENSG00000130656', 'ENSG00000206178') # https://doi.org/10.1038/s41598-020-62801-6 Table S1
@@ -43,50 +36,47 @@ numtries <- 5
 for(i in 1:numtries) {
   try({
     human_globin_peptide_ids <- biomaRt::getBM(attributes = 'ensembl_peptide_id', 
-                                             filters = 'ensembl_gene_id', 
-                                             values = human_globin_gene_ids, 
-                                             mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', 'hsapiens_gene_ensembl', version='Ensembl Genes 109'), 
-                                             uniqueRows = TRUE)[,1]
+                                               filters = 'ensembl_gene_id', 
+                                               values = human_globin_gene_ids, 
+                                               mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', 'hsapiens_gene_ensembl', version='Ensembl Genes 109'), 
+                                               uniqueRows = TRUE)[,1]
     break
   }, silent = FALSE)
 }
 
-globin_trees <- names(genetrees)[sapply(genetrees, \(x) any(human_globin_peptide_ids %in% x$tip.label))]
-tax_globin_peptide_ids <- lapply(names(species_strings), \(x) {
-  grep(paste0(species_strings[[x]],'P[[:digit:]]'), unlist(sapply(genetrees[globin_trees], \(y) y$tip.label)), value=TRUE)
-})
-names(tax_globin_peptide_ids) <- names(species_strings)
+orthologs <- read.table(file.path(output_prefix,'02_find_orthologs','of_out','Results_Mar08','Orthogroups','Orthogroups.tsv'), header=TRUE, row.names = 1, sep='\t')
+orthologs_1_1 <- orthologs[!apply(orthologs, 1, \(x) any(grepl(',',x) | (nchar(x) == 0))),]
+orthologs_1_1[,colnames(orthologs_1_1) != 'Homo_ensembl'] <- apply(orthologs_1_1[,colnames(orthologs_1_1) != 'Homo_ensembl'], 2, \(x) sapply(x, \(y) paste(strsplit(y,'.',fixed=TRUE)[[1]][1:2],collapse='.')))
+orthologs_1_1[,'Homo_ensembl'] <- sapply(orthologs_1_1[,'Homo_ensembl'], \(x) strsplit(x,'.',fixed=TRUE)[[1]][1])
+orthologs_1_1 <- orthologs_1_1[!orthologs_1_1[,'Homo_ensembl'] %in% human_globin_peptide_ids,]
+
+for(i in 1:numtries) {
+  try({
+  ensembl2ext <- biomaRt::getBM(attributes = c('ensembl_peptide_id', 'ensembl_gene_id', 'external_gene_name', 'go_id'), 
+                                filters = 'ensembl_peptide_id', 
+                                values = orthologs_1_1[,'Homo_ensembl'], 
+                                mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', 'hsapiens_gene_ensembl', version='Ensembl Genes 109'), 
+                                uniqueRows = TRUE)
+  break
+  }, silent = FALSE)
+}
 
 ## feels weird to round decimals for poisson error, but since data were counts at one point, zeros are possible, so doesn't make sense to just log-transform and use gaussian error; and error probably still scales like poisson such that low counts are less meaningful (and the decimal values rounded off would contribute negligible information) (cite Z1000 tximport paper)
-raw_txi <- lapply(names(species_strings), \(x) {
-  cat(paste0('Retrieving ensembl genes for ', x, ' \n'))
+raw_txi <- lapply(data_species, \(x) {
+  cat(paste0('Importing ', x, ' counts\n'))
   cfiles <- countfiles[grep(x, names(countfiles), ignore.case = TRUE)]
   tnames <- unique(do.call(rbind, lapply(cfiles, read.table, header=TRUE, sep='\t'))$Name)
-  for(i in 1:numtries) {
-    try({
-    ensembl2ext <- biomaRt::getBM(attributes = c('ensembl_transcript_id_version', 'ensembl_peptide_id', 'ensembl_gene_id', 'external_gene_name', 'go_id'), 
-                                  filters = 'ensembl_transcript_id_version', 
-                                  values = tnames, 
-                                  mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', martlist[[species_strings[[x]]]], version='Ensembl Genes 109'), 
-                                  uniqueRows = TRUE)
-    break
-    }, silent = FALSE)
-  }
-  tx2gene <- ensembl2ext[, c('ensembl_transcript_id_version', 'ensembl_gene_id')]
-  globins <- ensembl2ext$ensembl_gene_id[ensembl2ext$ensembl_peptide_id %in% tax_globin_peptide_ids[[x]]]
+  tx2gene <- data.frame(transcript=tnames, gene=sapply(tnames, \(y) paste(strsplit(y,'.',fixed=TRUE)[[1]][1:2],collapse='.')))
   txi <- tximport::tximport(cfiles, type = 'salmon', tx2gene = tx2gene)
-  txi$abundance <- txi$abundance[!rownames(txi$abundance) %in% globins,]
-  txi$counts <- txi$counts[!rownames(txi$counts) %in% globins,]
-  txi$length <- txi$length[!rownames(txi$length) %in% globins,]
-  txi$ensembl2ext <- ensembl2ext
   return(txi)
 })
-names(raw_txi) <- names(species_strings)
+names(raw_txi) <- data_species
 ##
 
 ## import reference data for species average body sizes
 body_size_ref <- read.csv(file.path(raw_data_prefix, 'gyz043_suppl_Supplement_Data.csv'))
 body_size_ref$genus_species <- paste(body_size_ref$genus, body_size_ref$species, sep='_')
+body_size_ref$genus_species[body_size_ref$genus_species == 'Cebus_apella'] <- 'Sapajus_apella' # misspelled in some versions of previous analysis; careful 
 ##
 
 ## calculate differences of individual sizes from species means and log-transform
@@ -116,45 +106,28 @@ sample_data_filt$body_mass_log_sp_std <- (sample_data_filt$body_mass_log_sp - bo
 sample_data_filt$body_mass_log_diff_std <- sample_data_filt$body_mass_log_diff / body_mass_log_diff_sd
 ##
 
-## find 1:1 orthologs for size factor calcs and for later per-gene analyses 
-cat('Finding orthologs\n')
-ortholog_peptides <- parallel::mclapply(genetrees, function(tree) {
-  nodes <- unique(tree$edge[,1])
-  alldescs <- lapply(phangorn::Descendants(tree, nodes), function(y) tree$tip.label[y])
-  names(alldescs) <- as.character(nodes)
-  is.ortho <- sapply(alldescs, function(y) {
-    all(sapply(species_strings, function(z) any(grepl(paste0(z,'P[[:digit:]]'), y)))) & length(y) == length(species_strings)
-  })
-  return(alldescs[is.ortho])
-}, mc.cores = nthreads)
-names(ortholog_peptides) <- names(genetrees)
-ortholog_peptides <- lapply(unlist(ortholog_peptides,recursive=F), sort)
+ortholog_genes <- unlist(parallel::mclapply(orthologs_1_1[,'Homo_ensembl'], \(x) ensembl2ext$ensembl_gene_id[match(x, ensembl2ext$ensembl_peptide_id)], mc.cores = nthreads))
 
-ensembl2ext_full <- do.call(rbind, lapply(raw_txi, \(x) x$ensembl2ext))
-ortholog_genes <- parallel::mclapply(ortholog_peptides, \(x) ensembl2ext_full$ensembl_gene_id[match(x, ensembl2ext_full$ensembl_peptide_id)], mc.cores = nthreads)
-
-ortholog_mat <- na.omit(do.call(rbind, ortholog_genes)[,c(1,4,2,3,5,6)]) ## order is hard-coded to match the order of the 'species_strings' variable for easier indexing
-colnames(ortholog_mat) <- names(species_strings)
-
+ortholog_mat <- orthologs_1_1[,names(raw_txi)]
 txi_ortho <- list(abundance = raw_txi[[1]]$abundance[ortholog_mat[,1],], 
                   counts    = raw_txi[[1]]$counts[ortholog_mat[,1],],
                   length    = raw_txi[[1]]$length[ortholog_mat[,1],],
                   countsFromAbundance = raw_txi[[1]]$countsFromAbundance)
-for(i in 2:length(species_strings)) {
+for(i in 2:length(data_species)) {
   txi_ortho$abundance <- cbind(txi_ortho$abundance, raw_txi[[i]]$abundance[ortholog_mat[,i],])
   txi_ortho$counts <- cbind(txi_ortho$counts, raw_txi[[i]]$counts[ortholog_mat[,i],])
   txi_ortho$length <- cbind(txi_ortho$length, raw_txi[[i]]$length[ortholog_mat[,i],])
 } 
-rownames(txi_ortho$abundance) <- rownames(txi_ortho$counts) <- rownames(txi_ortho$length) <- ortholog_mat[match(rownames(txi_ortho$length), ortholog_mat[,1]), 'Homo_sapiens']
+rownames(txi_ortho$abundance) <- rownames(txi_ortho$counts) <- rownames(txi_ortho$length) <- ensembl2ext$ensembl_gene_id[match(orthologs_1_1[match(rownames(txi_ortho$length), orthologs_1_1[,1]), 'Homo_ensembl'], ensembl2ext$ensembl_peptide_id)]
 
 ## import immune annotations
 
 ## all ensembl identifiers corresponding to immune annotations
 modules <- read.table(file.path(raw_data_prefix, 'immune_modules.txt'), sep='\t', quote='', header=T)
-ensembl2ext_full$module <- modules$IIG_class[match(ensembl2ext_full$external_gene_name, modules$HGNC_symbol)]
-ensembl2ext_full$module[is.na(ensembl2ext_full$module)] <- 'no_module_annotation'
+ensembl2ext$module <- modules$IIG_class[match(ensembl2ext$external_gene_name, modules$HGNC_symbol)]
+ensembl2ext$module[is.na(ensembl2ext$module)] <- 'no_module_annotation'
 
-immuneGenes <- unique(ensembl2ext_full$ensembl_gene_id[ensembl2ext_full$module != 'no_module_annotation'])
+immuneGenes <- unique(ensembl2ext$ensembl_gene_id[ensembl2ext$module != 'no_module_annotation'])
 
 ## pool immune-annotated 1:1 orthologous genes
 geneGroups <- rownames(txi_ortho$abundance)
@@ -175,6 +148,7 @@ dat_ortho <- data.frame(individual  = sapply(strsplit(colnames(DESeq2::counts(de
                         treatment   = factor(sapply(strsplit(colnames(DESeq2::counts(des_ortho_pool)), '_'), \(x) x[[4]]), levels=c('Null','LPS')),
                         norm_factor = log(DESeq2::normalizationFactors(des_ortho_pool)['immune',]),
                         count       = DESeq2::counts(des_ortho_pool)['immune',])
+levels(dat_ortho$species)[levels(dat_ortho$species) == 'Sapajus_appella'] <- 'Sapajus_apella'
 dat_ortho <- dat_ortho[dat_ortho$individual %in% sample_data_filt$Animal.ID,]
 dat_ortho$body_mass_log_sp_std <- sapply(dat_ortho$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
 dat_ortho$body_mass_log_diff_std <- sapply(dat_ortho$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
@@ -232,6 +206,7 @@ dat_all <- data.frame(individual  = sapply(strsplit(colnames(DESeq2::counts(des_
                       treatment   = factor(sapply(strsplit(colnames(DESeq2::counts(des_all_pool)), '_'), \(x) x[[4]]), levels=c('Null','LPS')),
                       norm_factor = log(DESeq2::normalizationFactors(des_all_pool)['immune',]),
                       count       = DESeq2::counts(des_all_pool)['immune',])
+levels(dat_all$species)[levels(dat_all$species) == 'Sapajus_appella'] <- 'Sapajus_apella'
 dat_all <- dat_all[dat_all$individual %in% sample_data_filt$Animal.ID,]
 dat_all$body_mass_log_sp_std <- sapply(dat_all$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
 dat_all$body_mass_log_diff_std <- sapply(dat_all$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
@@ -246,6 +221,7 @@ all_immune_res <- phyr::pglmm(formula       = phy_formula,
 all_immune_restab <- all_immune_res$inla.model$summary.lincomb.derived
 ##
 
+save.image(file.path(output_prefix,'02_phyr_int_results.RData'))
 
 ## fit per-gene models
 
@@ -261,6 +237,7 @@ fits <- parallel::mclapply(rownames(des), function(x) {
                     treatment   = factor(sapply(strsplit(colnames(DESeq2::counts(des)), '_'), \(x) x[[4]]), levels=c('Null','LPS')),
                     norm_factor = log(DESeq2::normalizationFactors(des)[x,]),
                     count       = DESeq2::counts(des)[x,])
+  levels(dat$species)[levels(dat$species) == 'Sapajus_appella'] <- 'Sapajus_apella'
   dat <- dat[dat$individual %in% sample_data_filt$Animal.ID,]
   dat$body_mass_log_sp_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
   dat$body_mass_log_diff_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
