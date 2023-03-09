@@ -6,7 +6,10 @@ focal_gene_names <- c("AKT1", "CASP4", "CASP8", "CCL3", "CCL4", "CD14", "CD69", 
 
 load(file.path(output_prefix,'03a_orthologs_phyr_results_noINLA.RData'))
 
-tlr4 <- unique(ensembl2ext_full$ensembl_gene_id[ensembl2ext_full$external_gene_name == 'TLR4' & grepl('ENSG[[:digit:]]', ensembl2ext_full$ensembl_gene_id)])
+tlr4 <- unique(ensembl2ext$ensembl_gene_id[ensembl2ext$external_gene_name == 'TLR4' & grepl('ENSG[[:digit:]]', ensembl2ext$ensembl_gene_id)])
+plot(sample_data_filt$body_mass_log_sp_std, log(DESeq2::counts(des)[tlr4,]) - log(DESeq2::normalizationFactors(des)[tlr4]), col=sample_data_filt$treatment)
+
+
 plot(fits[[tlr4]]$dat$body_mass_log_sp_std, log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor, col=fits[[tlr4]]$dat$treatment)
 plot(fits[[tlr4]]$dat$body_mass_log_diff_std, log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor, col=fits[[tlr4]]$dat$treatment)
 plot(body_mass_log_diff_sd * fits[[tlr4]]$dat$body_mass_log_diff_std + body_mass_log_sd * fits[[tlr4]]$dat$body_mass_log_sp_std, log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor, col=fits[[tlr4]]$dat$treatment)

@@ -190,36 +190,7 @@ ortho_immune_res <- phyr::pglmm(formula       = phy_formula,
 ortho_immune_restab <- ortho_immune_res$inla.model$summary.lincomb.derived
 ##
 
-## pool ALL immune-annotated genes. Should rethink this - go through tree and apply gene names from human reps to all other members of tree for consistency, then pool
-txi_all_immune_pool <- txi_ortho_immune_pool
-txi_all_immune_pool$abundance['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$abundance[rownames(x$abundance) %in% immuneGenes, , drop=FALSE])))
-txi_all_immune_pool$counts['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$counts[rownames(x$counts) %in% immuneGenes, , drop=FALSE])))
-txi_all_immune_pool$length['immune',] <- unlist(lapply(raw_txi, \(x) colSums(x$length[rownames(x$length) %in% immuneGenes, , drop=FALSE] * x$abundance[rownames(x$abundance) %in% immuneGenes, , drop=FALSE]))) / txi_all_immune_pool$abundance['immune',]  ## weighted arithmetic mean length of all immune genes
-
-## get normalization factors
-des_all_pool <- DESeq2:::DESeqDataSetFromTximport(txi_all_immune_pool, data.frame(Int=rep(1,ncol(txi_all_immune_pool$counts))), ~1)
-des_all_pool <- DESeq2::estimateSizeFactors(des_all_pool)
-
-## model total differential expression of immune genes
-dat_all <- data.frame(individual  = sapply(strsplit(colnames(DESeq2::counts(des_all_pool)), '_'), \(x) x[[3]]), 
-                      species     = as.factor(sapply(strsplit(colnames(DESeq2::counts(des_all_pool)), '_'), \(x) paste(tools::toTitleCase(x[1]), x[2], sep='_'))),
-                      treatment   = factor(sapply(strsplit(colnames(DESeq2::counts(des_all_pool)), '_'), \(x) x[[4]]), levels=c('Null','LPS')),
-                      norm_factor = log(DESeq2::normalizationFactors(des_all_pool)['immune',]),
-                      count       = DESeq2::counts(des_all_pool)['immune',])
-levels(dat_all$species)[levels(dat_all$species) == 'Sapajus_appella'] <- 'Sapajus_apella'
-dat_all <- dat_all[dat_all$individual %in% sample_data_filt$Animal.ID,]
-dat_all$body_mass_log_sp_std <- sapply(dat_all$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
-dat_all$body_mass_log_diff_std <- sapply(dat_all$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
-
-cat('Modeling all immune genes\n')
-all_immune_res <- phyr::pglmm(formula       = phy_formula, 
-                              family        = "poisson", 
-                              cov_ranef     = list(species = species_tree_norm), 
-                              data          = dat_all, 
-                              bayes         = TRUE, 
-                              bayes_options = list(lincomb = c(lc1,lc2,lc3,lc4,lc5)))
-all_immune_restab <- all_immune_res$inla.model$summary.lincomb.derived
-##
+## add method to pool ALL immune genes - not just 1:1 orthologs. will need to use full orthologs table to find any rows that contain an immune annotated human gene
 
 save.image(file.path(output_prefix,'02_phyr_int_results.RData'))
 

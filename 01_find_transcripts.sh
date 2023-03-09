@@ -18,20 +18,34 @@ out_dir=outputs/primates_20230304/01_find_transcripts
 fwds=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz)
 revs=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz)
 
+mkdir -p work/tmp/
+
+module purge
+module load hub.apps/anaconda3/2020.11
+source /shares/omicshub/apps/anaconda3/etc/profile.d/conda.sh
+conda deactivate
+conda deactivate
+conda activate stringtie_2.2.1
+
+superreads.pl <(zcat raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz) <(zcat raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz) /shares/omicshub/apps/anaconda3/envs/masurca -l work/tmp/${spec}_superreads.fastq -u work/tmp/${spec}_unassembled_
+
 ## map reads to genome
 module purge
 module load apps/hisat2/2.1.0
 module load apps/samtools/1.3.1
 
-mkdir -p work/tmp/
 hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   --no-discordant \
   --no-mixed \
   --dta-cufflinks \
-  -1 $(IFS=,; echo "${fwds[*]}") \
-  -2 $(IFS=,; echo "${revs[*]}") |
-  samtools view -@ 4 -bS - |
-  samtools sort -T work/tmp/${spec} -m 7G -@ 4 - > ${out_dir}/${spec}.bam
+  -1 work/tmp/${spec}_unassembled_R1.f1.gz \
+  -2 work/tmp/${spec}_unassembled_R1.f1.gz \
+  -U work/tmp/${spec}_superreads.fastq |
+  samtools view -@ 4 -bS - > work/tmp/${spec}_unsorted.bam
+
+samtools sort -T work/tmp/${spec} -m 7G -@ 4 -o ${out_dir}/${spec}.bam work/tmp/${spec}_unsorted.bam
+
+rm work/tmp/${spec}_superreads.fastq work/tmp/${spec}_unassembled_* work/tmp/${spec}_unsorted.bam
 
 ## create transcriptome from reads and genome
 module purge
@@ -42,7 +56,6 @@ conda deactivate
 conda activate stringtie_2.2.1
 
 stringtie -p 24 \
-  --conservative \
   -l ${spec} \
   -o ${out_dir}/${spec}_transcripts.gtf \
   ${out_dir}/${spec}.bam
@@ -62,36 +75,36 @@ TransDecoder.Predict -t ${spec}_transcripts.fa --single_best_only --output_dir $
 
 ## find longest isoform per gene
 grep '^>' ${spec}_transcripts.fa.transdecoder.pep |
-sort -V -k 1,1 |
-awk 'NR == 1 {
-      split($5, a, ":")
-      curlen = a[2]
-      split($1, b, ".")
-      curgene = b[1]"."b[2]
-      sub(">", "", $1)
-      longest = $1
-    }
-    NR > 1 {
-      split($5, a, ":")
-      curlen = a[2]
-      split($1, b, ".")
-      gene = b[1]"."b[2]
-      if(gene != curgene) {
-        curgene = gene
-        curlen = len
-        print longest
-        sub(">", "", $1)
-        longest = $1
-      }
-      else if(len > curlen) {
-        sub(">", "", $1)
-        longest = $1
-        curlen = len
-      }
-    }
-    END {
-      print longest
-    }' > ${spec}_longest_transcript_per_gene.txt
+  sort -V -k 1,1 |
+    awk 'NR == 1 {
+          split($5, a, ":")
+          curlen = a[2]
+          split($1, b, ".")
+          curgene = b[1]"."b[2]
+          sub(">", "", $1)
+          longest = $1
+        }
+        NR > 1 {
+          split($5, a, ":")
+          curlen = a[2]
+          split($1, b, ".")
+          gene = b[1]"."b[2]
+          if(gene != curgene) {
+            curgene = gene
+            curlen = len
+            print longest
+            sub(">", "", $1)
+            longest = $1
+          }
+          else if(len > curlen) {
+            sub(">", "", $1)
+            longest = $1
+            curlen = len
+          }
+        }
+        END {
+          print longest
+        }' > ${spec}_longest_transcript_per_gene.txt
 
 ## filter fasta to only keep longest isoforms
 awk 'NR == FNR {
