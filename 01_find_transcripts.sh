@@ -16,6 +16,7 @@ ref_dir=outputs/primates_20230309_all/00_references
 out_dir=outputs/primates_20230309_all/01_find_transcripts
 
 mkdir -p work/tmp/${spec}
+mkdir -p ${out_dir}/${spec}_superreads
 
 module purge
 module load hub.apps/anaconda3/2020.11
@@ -28,9 +29,7 @@ wd=$(pwd)
 
 cd work/tmp/${spec}
 
-fwds=(${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz)
-
-for fwd in ${fwds[@]}; do
+for fwd in ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz; do
 
   rev=${fwd%_R1_001.fastq.gz}_R2_001.fastq.gz
   sample=$(basename ${fwd})
@@ -41,17 +40,17 @@ for fwd in ${fwds[@]}; do
   zcat ${fwd} > in1.fq
   zcat ${rev} > in2.fq
 
-  superreads.pl in1.fq in2.fq /shares/omicshub/apps/anaconda3/envs/masurca -t 24 -l ../${sample}_superreads.fastq -u ../${sample}_unassembled_
+  superreads.pl in1.fq in2.fq /shares/omicshub/apps/anaconda3/envs/masurca -t 24 -l ${out_dir}/${spec}_superreads/${sample}_superreads.fastq -u ${out_dir}/${spec}_superreads/${sample}_unassembled_
 
-  rm ./*
+  rm -r ./*
 
 done
 
 cd ${wd}
 
-unassembled1=(work/tmp/${spec}_*_unassembled_R1.fq.gz)
-unassembled2=(work/tmp/${spec}_*_unassembled_R2.fq.gz)
-superreads=(work/tmp/${spec}_*_superreads.fastq)
+unassembled1=(${out_dir}/${spec}_superreads/*_unassembled_R1.fq.gz)
+unassembled2=(${out_dir}/${spec}_superreads/*_unassembled_R2.fq.gz)
+superreads=(${out_dir}/${spec}_superreads/*_superreads.fastq)
 
 ## map reads to genome
 module purge
