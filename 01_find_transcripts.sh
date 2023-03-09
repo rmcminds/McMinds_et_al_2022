@@ -15,7 +15,7 @@ spec=${species[$SLURM_ARRAY_TASK_ID]}
 ref_dir=outputs/primates_20230309_all/00_references
 out_dir=outputs/primates_20230309_all/01_find_transcripts
 
-mkdir -p work/tmp/
+mkdir -p work/tmp/${spec}
 
 module purge
 module load hub.apps/anaconda3/2020.11
@@ -24,7 +24,13 @@ conda deactivate
 conda deactivate
 conda activate stringtie_2.2.1
 
-superreads.pl <(zcat raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz) <(zcat raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz) /shares/omicshub/apps/anaconda3/envs/masurca -l work/tmp/${spec}_superreads.fastq -u work/tmp/${spec}_unassembled_
+wd=$(pwd)
+
+cd work/tmp/${spec}
+
+superreads.pl <(zcat ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz) <(zcat ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz) /shares/omicshub/apps/anaconda3/envs/masurca -l ${wd}/work/tmp/${spec}_superreads.fastq -u ${wd}/work/tmp/${spec}_unassembled_
+
+cd ${wd}
 
 ## map reads to genome
 module purge
