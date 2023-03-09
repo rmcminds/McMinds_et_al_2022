@@ -5,8 +5,6 @@ output_prefix <- path.expand('outputs/primates_20230304/')
 
 data_species <- c('Callithrix_jacchus', 'Daubentonia_madagascariensis', 'Homo_sapiens', 'Lemur_catta', 'Macaca_mulatta', 'Microcebus_murinus', 'Papio_anubis', 'Pongo_abelii', 'Sapajus_appella')
 
-species_strings <- c(Callithrix_jacchus='ENSCJA', Homo_sapiens='ENS', Microcebus_murinus='ENSMIC', Macaca_mulatta='ENSMMU', Papio_anubis='ENSPAN', Pongo_abelii='ENSPPY')
-
 cat('Importing cladogram\n')
 species_tree <- ape::read.tree(file.path(raw_data_prefix, 'primates.newick'))
 species_tree_norm <- species_tree
