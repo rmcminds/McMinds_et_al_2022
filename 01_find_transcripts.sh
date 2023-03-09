@@ -51,6 +51,7 @@ cd ${wd}
 
 unassembled1=(work/tmp/${spec}_*_unassembled_R1.fq.gz)
 unassembled2=(work/tmp/${spec}_*_unassembled_R2.fq.gz)
+superreads=(work/tmp/${spec}_*_superreads.fastq)
 
 ## map reads to genome
 module purge
@@ -63,7 +64,7 @@ hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   --dta-cufflinks \
   -1 $(IFS=,; echo "${unassembled1[*]}") \
   -2 $(IFS=,; echo "${unassembled2[*]}") \
-  -U work/tmp/${spec}_*_superreads.fastq |
+  -U $(IFS=,; echo "${superreads[*]}") |
   samtools view -@ 4 -bS - > work/tmp/${spec}/unsorted.bam
 
 samtools sort -T work/tmp/${spec}/sorting -m 7G -@ 4 -o ${out_dir}/${spec}.bam work/tmp/${spec}/unsorted.bam
