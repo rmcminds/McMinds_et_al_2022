@@ -5,12 +5,12 @@
 #SBATCH --qos=rra
 #SBATCH --partition=rra
 #SBATCH --ntasks=24
-#SBATCH --output=outputs/primates_20230304/00_references.log
+#SBATCH --output=outputs/primates_20230309_all/00_references.log
 
-mkdir -p outputs/primates_20230304/00_references
-cd outputs/primates_20230304/00_references
+mkdir -p outputs/primates_20230309_all/00_references
+cd outputs/primates_20230309_all/00_references
 
-ncbispec=(daubentonia_madagascariensis lemur_catta sapajus_appella)
+ncbispec=(daubentonia_madagascariensis lemur_catta sapajus_apella)
 ncbiacc=(GCA_023783475.1 GCF_020740605.2 GCF_009761245.1)
 
 module purge

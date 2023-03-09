@@ -5,15 +5,15 @@
 #SBATCH --qos=rra
 #SBATCH --partition=rra
 #SBATCH --ntasks-per-node=24
-#SBATCH --output=outputs/primates_20230304/02_find_orthologs.log
+#SBATCH --output=outputs/primates_20230309_all/02_find_orthologs.log
 
 wd=$(pwd)
-out_dir=outputs/primates_20230304/02_find_orthologs/
+out_dir=outputs/primates_20230309_all/02_find_orthologs/
 
 mkdir -p ${out_dir}/peptides
 
 ## copy seqs into directory with clean filenames
-for i in outputs/primates_20230304/01_find_transcripts/*_longest_peptide_per_gene.pep; do
+for i in outputs/primates_20230309_all/01_find_transcripts/*_longest_peptide_per_gene.pep; do
   newname=$(basename ${i})
   newname=${newname/_longest_peptide_per_gene.pep/.fa}
   newname=${newname^}

@@ -3,9 +3,7 @@ nthreads <- 7
 raw_data_prefix <- path.expand('raw_data/20221215_primate_allometry/')
 output_prefix <- path.expand('outputs/primates_20230304/')
 
-data_species <- c('Callithrix_jacchus', 'Daubentonia_madagascariensis', 'Homo_sapiens', 'Lemur_catta', 'Macaca_mulatta', 'Microcebus_murinus', 'Papio_anubis', 'Pongo_abelii', 'Sapajus_appella')
-
-species_strings <- c(Callithrix_jacchus='ENSCJA', Homo_sapiens='ENS', Microcebus_murinus='ENSMIC', Macaca_mulatta='ENSMMU', Papio_anubis='ENSPAN', Pongo_abelii='ENSPPY')
+data_species <- c('Callithrix_jacchus', 'Daubentonia_madagascariensis', 'Homo_sapiens', 'Lemur_catta', 'Macaca_mulatta', 'Microcebus_murinus', 'Papio_anubis', 'Pongo_abelii', 'Sapajus_apella')
 
 cat('Importing cladogram\n')
 species_tree <- ape::read.tree(file.path(raw_data_prefix, 'primates.newick'))
@@ -76,7 +74,7 @@ names(raw_txi) <- data_species
 ## import reference data for species average body sizes
 body_size_ref <- read.csv(file.path(raw_data_prefix, 'gyz043_suppl_Supplement_Data.csv'))
 body_size_ref$genus_species <- paste(body_size_ref$genus, body_size_ref$species, sep='_')
-body_size_ref$genus_species[body_size_ref$genus_species == 'Cebus_apella'] <- 'Sapajus_apella' # misspelled in some versions of previous analysis; careful 
+body_size_ref$genus_species[body_size_ref$genus_species == 'Cebus_apella'] <- 'Sapajus_apella' 
 ##
 
 ## calculate differences of individual sizes from species means and log-transform
@@ -148,7 +146,6 @@ dat_ortho <- data.frame(individual  = sapply(strsplit(colnames(DESeq2::counts(de
                         treatment   = factor(sapply(strsplit(colnames(DESeq2::counts(des_ortho_pool)), '_'), \(x) x[[4]]), levels=c('Null','LPS')),
                         norm_factor = log(DESeq2::normalizationFactors(des_ortho_pool)['immune',]),
                         count       = DESeq2::counts(des_ortho_pool)['immune',])
-levels(dat_ortho$species)[levels(dat_ortho$species) == 'Sapajus_appella'] <- 'Sapajus_apella'
 dat_ortho <- dat_ortho[dat_ortho$individual %in% sample_data_filt$Animal.ID,]
 dat_ortho$body_mass_log_sp_std <- sapply(dat_ortho$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
 dat_ortho$body_mass_log_diff_std <- sapply(dat_ortho$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
@@ -208,7 +205,6 @@ fits <- parallel::mclapply(rownames(des), function(x) {
                     treatment   = factor(sapply(strsplit(colnames(DESeq2::counts(des)), '_'), \(x) x[[4]]), levels=c('Null','LPS')),
                     norm_factor = log(DESeq2::normalizationFactors(des)[x,]),
                     count       = DESeq2::counts(des)[x,])
-  levels(dat$species)[levels(dat$species) == 'Sapajus_appella'] <- 'Sapajus_apella'
   dat <- dat[dat$individual %in% sample_data_filt$Animal.ID,]
   dat$body_mass_log_sp_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
   dat$body_mass_log_diff_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
