@@ -8,7 +8,7 @@
 #SBATCH --output=outputs/primates_20230309_all/01_find_transcripts/logs/01_find_transcripts_%a.log
 #SBATCH --array=0-8
 
-species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii daubentonia_madagascariensis lemur_catta sapajus_appella)
+species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii daubentonia_madagascariensis lemur_catta sapajus_apella)
 
 spec=${species[$SLURM_ARRAY_TASK_ID]}
 
