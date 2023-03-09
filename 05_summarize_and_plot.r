@@ -28,6 +28,9 @@ legend(x='topleft',legend=c('Null','LPS'),col=c('black','red'),lty=1)
 
 plot(body_mass_log_sd * dat_ortho$body_mass_log_sp_std, body_mass_log_diff_sd * dat_ortho$body_mass_log_diff_std)
 
+ww <- 2
+plot(body_mass_log_sd * module_fits[[ww]]$dat$body_mass_log_sp_std, log(module_fits[[ww]]$dat$count) - module_fits[[ww]]$dat$norm_factor, col=module_fits[[ww]]$dat$treatment, main='Immune module expression', xlab='log body size', ylab='log normalized counts')
+ 
 x1 <- (body_mass_log_diff_sd * fits[[curgene]]$dat$body_mass_log_diff_std)
 x2 <- x1 * (fits[[curgene]]$dat$treatment == 'LPS')
 y <- (log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor)
