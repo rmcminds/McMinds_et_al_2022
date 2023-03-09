@@ -6,29 +6,36 @@ focal_gene_names <- c("AKT1", "CASP4", "CASP8", "CCL3", "CCL4", "CD14", "CD69", 
 
 load(file.path(output_prefix,'03a_orthologs_phyr_results_noINLA.RData'))
 
-tlr4 <- unique(ensembl2ext$ensembl_gene_id[ensembl2ext$external_gene_name == 'TLR4' & grepl('ENSG[[:digit:]]', ensembl2ext$ensembl_gene_id)])
-plot(sample_data_filt$body_mass_log_sp_std, log(DESeq2::counts(des)[tlr4,]) - log(DESeq2::normalizationFactors(des)[tlr4]), col=sample_data_filt$treatment)
+curgene <- unique(ensembl2ext$ensembl_gene_id[ensembl2ext$external_gene_name == 'TLR4' & grepl('ENSG[[:digit:]]', ensembl2ext$ensembl_gene_id)])
 
+curgene <- unique(ensembl2ext$ensembl_gene_id[ensembl2ext$external_gene_name == 'IL1B' & grepl('ENSG[[:digit:]]', ensembl2ext$ensembl_gene_id)])
 
-plot(fits[[tlr4]]$dat$body_mass_log_sp_std, log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor, col=fits[[tlr4]]$dat$treatment)
-plot(fits[[tlr4]]$dat$body_mass_log_diff_std, log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor, col=fits[[tlr4]]$dat$treatment)
-plot(body_mass_log_diff_sd * fits[[tlr4]]$dat$body_mass_log_diff_std + body_mass_log_sd * fits[[tlr4]]$dat$body_mass_log_sp_std, log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor, col=fits[[tlr4]]$dat$treatment)
+plot(fits[[curgene]]$dat$body_mass_log_sp_std, log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor, col=fits[[curgene]]$dat$treatment, pch=(1:nlevels(fits[[curgene]]$dat$species))[fits[[curgene]]$dat$species])
+plot(fits[[curgene]]$dat$body_mass_log_diff_std, log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor, col=fits[[curgene]]$dat$treatment)
+plot(body_mass_log_diff_sd * fits[[curgene]]$dat$body_mass_log_diff_std + body_mass_log_sd * fits[[curgene]]$dat$body_mass_log_sp_std, log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor, col=fits[[curgene]]$dat$treatment)
 
-IL1B <- unique(ensembl2ext_full$ensembl_gene_id[ensembl2ext_full$external_gene_name == 'IL1B' & grepl('ENSG[[:digit:]]', ensembl2ext_full$ensembl_gene_id)])
+hi <- t(sapply(unique(fits[[curgene]]$dat$individual), \(x) {
+  datnow <- fits[[curgene]]$dat
+  c(datnow[datnow$individual==x & datnow$treatment=='LPS','body_mass_log_sp_std'], 
+    (log(datnow[datnow$individual==x & datnow$treatment=='LPS','count']) - datnow[datnow$individual==x & datnow$treatment=='LPS','norm_factor']) - 
+      (log(datnow[datnow$individual==x & datnow$treatment=='Null','count']) - datnow[datnow$individual==x & datnow$treatment=='Null','norm_factor']))
+}))
+
+plot(hi, pch=(1:nlevels(as.factor(sample_data_filt$Family)))[as.factor(sample_data_filt$Family)[match(rownames(hi), sample_data_filt$Animal.ID)]])
 
 plot(body_mass_log_sd * dat_ortho$body_mass_log_sp_std, log(dat_ortho$count) - dat_ortho$norm_factor, col=dat_ortho$treatment, main='Total immune gene expression', xlab='log body size', ylab='log normalized counts')
 legend(x='topleft',legend=c('Null','LPS'),col=c('black','red'),lty=1)
 
 plot(body_mass_log_sd * dat_ortho$body_mass_log_sp_std, body_mass_log_diff_sd * dat_ortho$body_mass_log_diff_std)
 
-x1 <- (body_mass_log_diff_sd * fits[[tlr4]]$dat$body_mass_log_diff_std)
-x2 <- x1 * (fits[[tlr4]]$dat$treatment == 'LPS')
-y <- (log(fits[[tlr4]]$dat$count) - fits[[tlr4]]$dat$norm_factor)
-tlr4in <- lm(y~x1+x2)$coefficients[[1]]
-tlr4co1 <- lm(y~x1+x2)$coefficients[[2]]
-tlr4co2 <- lm(y~x1+x2)$coefficients[[3]]
-adjustedtlr4 <- y - (tlr4co1 * x1) - (tlr4co2 * x2)
-plot(body_mass_log_sd * fits[[tlr4]]$dat$body_mass_log_sp_std, adjustedtlr4, col=fits[[tlr4]]$dat$treatment)
+x1 <- (body_mass_log_diff_sd * fits[[curgene]]$dat$body_mass_log_diff_std)
+x2 <- x1 * (fits[[curgene]]$dat$treatment == 'LPS')
+y <- (log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor)
+curgenein <- lm(y~x1+x2)$coefficients[[1]]
+curgeneco1 <- lm(y~x1+x2)$coefficients[[2]]
+curgeneco2 <- lm(y~x1+x2)$coefficients[[3]]
+adjustedcurgene <- y - (curgeneco1 * x1) - (curgeneco2 * x2)
+plot(body_mass_log_sd * fits[[curgene]]$dat$body_mass_log_sp_std, adjustedcurgene, col=fits[[curgene]]$dat$treatment)
 ##
 
 # filter out genes that didn't converge

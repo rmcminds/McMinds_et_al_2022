@@ -40,7 +40,7 @@ for fwd in ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fast
   zcat ${fwd} > in1.fq
   zcat ${rev} > in2.fq
 
-  superreads.pl in1.fq in2.fq /shares/omicshub/apps/anaconda3/envs/masurca -t 24 -l ${out_dir}/${spec}_superreads/${sample}_superreads.fastq -u ${out_dir}/${spec}_superreads/${sample}_unassembled_
+  superreads.pl in1.fq in2.fq /shares/omicshub/apps/anaconda3/envs/masurca -t 24 -l ${wd}/${out_dir}/${spec}_superreads/${sample}_superreads.fastq -u ${wd}/${out_dir}/${spec}_superreads/${sample}_unassembled_
 
   rm -r ./*
 
