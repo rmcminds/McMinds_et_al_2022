@@ -31,7 +31,7 @@ cd work/tmp/${spec}
 cat ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz > in1.fq.gz
 cat ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz > in2.fq.gz
 
-superreads.pl in1.fq in2.fq /shares/omicshub/apps/anaconda3/envs/masurca -t 24 -l superreads.fastq -u unassembled_
+superreads.pl in1.fq.gz in2.fq.gz /shares/omicshub/apps/anaconda3/envs/masurca -t 24 -l superreads.fastq -u unassembled_
 
 rm in1.fq.gz in2.fq.gz
 
