@@ -28,7 +28,10 @@ wd=$(pwd)
 
 cd work/tmp/${spec}
 
-superreads.pl <(zcat ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz) <(zcat ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz) /shares/omicshub/apps/anaconda3/envs/masurca -l ${wd}/work/tmp/${spec}_superreads.fastq -u ${wd}/work/tmp/${spec}_unassembled_
+zcat ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz > in1.fq
+zcat ${wd}/raw_data/20221215_primate_allometry/fastqs/${spec}*_R2_001.fastq.gz > in2.fq
+
+superreads.pl in1.fq in2.fq /shares/omicshub/apps/anaconda3/envs/masurca -l superreads.fastq -u unassembled_
 
 cd ${wd}
 
@@ -41,14 +44,14 @@ hisat2 -p 24 -x ${ref_dir}/${spec}_index \
   --no-discordant \
   --no-mixed \
   --dta-cufflinks \
-  -1 work/tmp/${spec}_unassembled_R1.fq.gz \
-  -2 work/tmp/${spec}_unassembled_R2.fq.gz \
-  -U work/tmp/${spec}_superreads.fastq |
-  samtools view -@ 4 -bS - > work/tmp/${spec}_unsorted.bam
+  -1 work/tmp/${spec}/unassembled_R1.fq.gz \
+  -2 work/tmp/${spec}/unassembled_R2.fq.gz \
+  -U work/tmp/${spec}/superreads.fastq |
+  samtools view -@ 4 -bS - > work/tmp/${spec}/unsorted.bam
 
-samtools sort -T work/tmp/${spec} -m 7G -@ 4 -o ${out_dir}/${spec}.bam work/tmp/${spec}_unsorted.bam
+samtools sort -T work/tmp/${spec}/sorting -m 7G -@ 4 -o ${out_dir}/${spec}.bam work/tmp/${spec}/unsorted.bam
 
-rm work/tmp/${spec}_superreads.fastq work/tmp/${spec}_unassembled_* work/tmp/${spec}_unsorted.bam
+rm -r work/tmp/${spec}
 
 ## create transcriptome from reads and genome
 module purge
