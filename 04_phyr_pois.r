@@ -1,7 +1,7 @@
 
 nthreads <- 7
 raw_data_prefix <- path.expand('raw_data/20221215_primate_allometry/')
-output_prefix <- path.expand('outputs/primates_20230304/')
+output_prefix <- path.expand('outputs/primates_20230309_all/')
 
 data_species <- c('Callithrix_jacchus', 'Daubentonia_madagascariensis', 'Homo_sapiens', 'Lemur_catta', 'Macaca_mulatta', 'Microcebus_murinus', 'Papio_anubis', 'Pongo_abelii', 'Sapajus_apella')
 
@@ -42,7 +42,7 @@ for(i in 1:numtries) {
   }, silent = FALSE)
 }
 
-orthologs <- read.table(file.path(output_prefix,'02_find_orthologs','of_out','Results_Mar08','Orthogroups','Orthogroups.tsv'), header=TRUE, row.names = 1, sep='\t')
+orthologs <- read.table(file.path(output_prefix,'02_find_orthologs','of_out','Results_Mar13','Orthogroups','Orthogroups.tsv'), header=TRUE, row.names = 1, sep='\t')
 orthologs_1_1 <- orthologs[!apply(orthologs, 1, \(x) any(grepl(',',x) | (nchar(x) == 0))),]
 orthologs_1_1[,colnames(orthologs_1_1) != 'Homo_ensembl'] <- apply(orthologs_1_1[,colnames(orthologs_1_1) != 'Homo_ensembl'], 2, \(x) sapply(x, \(y) paste(strsplit(y,'.',fixed=TRUE)[[1]][1:2],collapse='.')))
 orthologs_1_1[,'Homo_ensembl'] <- sapply(orthologs_1_1[,'Homo_ensembl'], \(x) strsplit(x,'.',fixed=TRUE)[[1]][1])
