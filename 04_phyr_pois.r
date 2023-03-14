@@ -1,9 +1,11 @@
 
 nthreads <- 7
 raw_data_prefix <- path.expand('raw_data/20221215_primate_allometry/')
-output_prefix <- path.expand('outputs/primates_20230309_all/')
+output_prefix <- path.expand('outputs/primates_20230314_mixed/')
 
 data_species <- c('Callithrix_jacchus', 'Daubentonia_madagascariensis', 'Homo_sapiens', 'Lemur_catta', 'Macaca_mulatta', 'Microcebus_murinus', 'Papio_anubis', 'Pongo_abelii', 'Sapajus_apella')
+ensembl_species <- c('Callithrix_jacchus', 'Homo_sapiens', 'Macaca_mulatta', 'Microcebus_murinus', 'Papio_anubis', 'Pongo_abelii')
+ncbi_species <- c('Daubentonia_madagascariensis', 'Lemur_catta', 'Sapajus_apella')
 
 cat('Importing cladogram\n')
 species_tree <- ape::read.tree(file.path(raw_data_prefix, 'primates.newick'))
@@ -42,17 +44,17 @@ for(i in 1:numtries) {
   }, silent = FALSE)
 }
 
-orthologs <- read.table(file.path(output_prefix,'02_find_orthologs','of_out','Results_Mar13','Orthogroups','Orthogroups.tsv'), header=TRUE, row.names = 1, sep='\t')
+orthologs <- read.table(file.path(output_prefix,'02_find_orthologs','of_out','Results_Mar14','Orthogroups','Orthogroups.tsv'), header=TRUE, row.names = 1, sep='\t')
 orthologs_1_1 <- orthologs[!apply(orthologs, 1, \(x) any(grepl(',',x) | (nchar(x) == 0))),]
-orthologs_1_1[,colnames(orthologs_1_1) != 'Homo_ensembl'] <- apply(orthologs_1_1[,colnames(orthologs_1_1) != 'Homo_ensembl'], 2, \(x) sapply(x, \(y) paste(strsplit(y,'.',fixed=TRUE)[[1]][1:2],collapse='.')))
-orthologs_1_1[,'Homo_ensembl'] <- sapply(orthologs_1_1[,'Homo_ensembl'], \(x) strsplit(x,'.',fixed=TRUE)[[1]][1])
-orthologs_1_1 <- orthologs_1_1[!orthologs_1_1[,'Homo_ensembl'] %in% human_globin_peptide_ids,]
+orthologs_1_1[,colnames(orthologs_1_1) %in% ncbi_species] <- apply(orthologs_1_1[,colnames(orthologs_1_1) %in% ncbi_species], 2, \(x) sapply(x, \(y) paste(strsplit(y,'.',fixed=TRUE)[[1]][1:2],collapse='.')))
+orthologs_1_1[,colnames(orthologs_1_1) %in% ensembl_species] <- sapply(orthologs_1_1[,colnames(orthologs_1_1) %in% ensembl_species], \(x) strsplit(x,'.',fixed=TRUE)[[1]][1])
+orthologs_1_1 <- orthologs_1_1[!orthologs_1_1[,'Homo_sapiens'] %in% human_globin_peptide_ids,]
 
 for(i in 1:numtries) {
   try({
   ensembl2ext <- biomaRt::getBM(attributes = c('ensembl_peptide_id', 'ensembl_gene_id', 'external_gene_name', 'go_id'), 
                                 filters = 'ensembl_peptide_id', 
-                                values = orthologs_1_1[,'Homo_ensembl'], 
+                                values = orthologs_1_1[,'Homo_sapiens'], 
                                 mart = biomaRt::useMart('ENSEMBL_MART_ENSEMBL', 'hsapiens_gene_ensembl', version='Ensembl Genes 109'), 
                                 uniqueRows = TRUE)
   break
@@ -104,7 +106,7 @@ sample_data_filt$body_mass_log_sp_std <- (sample_data_filt$body_mass_log_sp - bo
 sample_data_filt$body_mass_log_diff_std <- sample_data_filt$body_mass_log_diff / body_mass_log_diff_sd
 ##
 
-ortholog_genes <- unlist(parallel::mclapply(orthologs_1_1[,'Homo_ensembl'], \(x) ensembl2ext$ensembl_gene_id[match(x, ensembl2ext$ensembl_peptide_id)], mc.cores = nthreads))
+ortholog_genes <- unlist(parallel::mclapply(orthologs_1_1[,'Homo_sapiens'], \(x) ensembl2ext$ensembl_gene_id[match(x, ensembl2ext$ensembl_peptide_id)], mc.cores = nthreads))
 
 ortholog_mat <- orthologs_1_1[,names(raw_txi)]
 txi_ortho <- list(abundance = raw_txi[[1]]$abundance[ortholog_mat[,1],], 
@@ -116,7 +118,7 @@ for(i in 2:length(data_species)) {
   txi_ortho$counts <- cbind(txi_ortho$counts, raw_txi[[i]]$counts[ortholog_mat[,i],])
   txi_ortho$length <- cbind(txi_ortho$length, raw_txi[[i]]$length[ortholog_mat[,i],])
 } 
-rownames(txi_ortho$abundance) <- rownames(txi_ortho$counts) <- rownames(txi_ortho$length) <- ensembl2ext$ensembl_gene_id[match(orthologs_1_1[match(rownames(txi_ortho$length), orthologs_1_1[,1]), 'Homo_ensembl'], ensembl2ext$ensembl_peptide_id)]
+rownames(txi_ortho$abundance) <- rownames(txi_ortho$counts) <- rownames(txi_ortho$length) <- ensembl2ext$ensembl_gene_id[match(orthologs_1_1[match(rownames(txi_ortho$length), orthologs_1_1[,1]), 'Homo_sapiens'], ensembl2ext$ensembl_peptide_id)]
 
 ## import immune annotations
 
@@ -218,8 +220,7 @@ module_fits <- lapply(c('sensor','effector','bureaucracy'), function(x) {
   dat <- dat[dat$individual %in% sample_data_filt$Animal.ID,]
   dat$body_mass_log_sp_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_sp_std[sample_data_filt$Animal.ID==z])
   dat$body_mass_log_diff_std <- sapply(dat$individual, function(z) sample_data_filt$body_mass_log_diff_std[sample_data_filt$Animal.ID==z])
-  levels(dat$species)[levels(dat$species) == 'Sapajus_appella'] <- 'Sapajus_apella'
-  
+
   res <- phyr::pglmm(formula       = phy_formula, 
                      family        = "poisson", 
                      cov_ranef     = list(species = species_tree_norm), 
