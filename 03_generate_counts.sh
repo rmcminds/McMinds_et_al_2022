@@ -5,15 +5,15 @@
 #SBATCH --qos=rra
 #SBATCH --partition=rra
 #SBATCH --ntasks=20
-#SBATCH --output=outputs/primates_20230309_all/03_generate_counts/logs/03_generate_counts_%a.log
+#SBATCH --output=outputs/primates_20230314_mixed/03_generate_counts/logs/03_generate_counts_%a.log
 #SBATCH --array=0-8
 
 species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii daubentonia_madagascariensis lemur_catta sapajus_apella)
 
 spec=${species[$SLURM_ARRAY_TASK_ID]}
 
-in_dir=outputs/primates_20230309_all/01_find_transcripts
-out_dir=outputs/primates_20230309_all/03_generate_counts
+in_dir=(outputs/primates_20230314_mixed/01_find_transcripts outputs/primates_20230314_mixed/01_find_transcripts outputs/primates_20230314_mixed/01_find_transcripts outputs/primates_20230314_mixed/01_find_transcripts outputs/primates_20230314_mixed/01_find_transcripts outputs/primates_20230314_mixed/01_find_transcripts outputs/primates_20230314_mixed/02_find_orthologs/ensembl outputs/primates_20230314_mixed/02_find_orthologs/ensembl outputs/primates_20230314_mixed/02_find_orthologs/ensembl)
+out_dir=outputs/primates_20230314_mixed/03_generate_counts
 
 fwds=(raw_data/20221215_primate_allometry/fastqs/${spec}*_R1_001.fastq.gz)
 
@@ -26,7 +26,7 @@ source /shares/omicshub/apps/anaconda3/etc/profile.d/conda.sh
 conda deactivate
 conda activate salmon
 
-salmon index --index ${out_dir}/${spec}_salmon_index --transcripts ${in_dir}/${spec}_transcripts.fa
+salmon index --index ${out_dir}/${spec}_salmon_index --transcripts ${in_dir[$SLURM_ARRAY_TASK_ID]}/${spec}_transcripts.fa
 
 for fwd in ${fwds[@]}; do
 

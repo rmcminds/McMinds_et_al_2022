@@ -5,42 +5,55 @@
 #SBATCH --qos=rra
 #SBATCH --partition=rra
 #SBATCH --ntasks-per-node=24
-#SBATCH --output=outputs/primates_20230309_all/02_find_orthologs.log
+#SBATCH --output=outputs/primates_20230314_mixed/02_find_orthologs.log
 
 wd=$(pwd)
-out_dir=outputs/primates_20230309_all/02_find_orthologs/
+out_dir=outputs/primates_20230314_mixed/02_find_orthologs/
 
 mkdir -p ${out_dir}/peptides
 
 ## copy seqs into directory with clean filenames
-for i in outputs/primates_20230309_all/01_find_transcripts/*_longest_peptide_per_gene.pep; do
+for i in outputs/primates_20230314_mixed/01_find_transcripts/*_longest_peptide_per_gene.pep; do
   newname=$(basename ${i})
   newname=${newname/_longest_peptide_per_gene.pep/.fa}
   newname=${newname^}
   cp ${i} ${out_dir}/peptides/${newname}
 done
 
-## download ensembl human cds and add to peptides folder
+## download ensembl peptides and add to peptides folder
 mkdir ${out_dir}/ensembl
 cd ${out_dir}/ensembl
 
-wget -N https://ftp.ensembl.org/pub/release-109/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz
 wget -N https://ftp.ensembl.org/pub/release-109/emf/ensembl-compara/homologies/Compara.109.protein_default.aa.fasta.gz
 
-cd ${wd}
+species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii)
+spestrings=('ENSCJAP[[:digit:]]' 'ENSP[[:digit:]]' 'ENSMMUP[[:digit:]]' 'ENSMICP[[:digit:]]' 'ENSPANP[[:digit:]]' 'ENSPPYP[[:digit:]]')
 
-## keep only the reference peptides that ensembl uses for their gene trees. Could also just not use the Homo_sapiens file and extract from alignment, but then would want to remove alignment dashes
-awk 'NR == FNR {
-       a[$1]++
-       next
-     }
-     NR != FNR {
-       split($1, b, ".")
-       if(">"b[1] in a) {
-         sub(/\n$/, "")
-         print ">"$0
+for i in 0..5; do
+
+  spec=${species[$i]}
+  
+  ## download
+  wget -e robots=off -r -N -l1 -nd -A '*.pep.all.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/pep/
+  wget -e robots=off -r -N -l1 -nd -A '*.cdna.all.fa.gz' https://ftp.ensembl.org/pub/release-109/fasta/${spec}/cdna/
+  zcat ${spec^}.*.cdna.all.fa.gz > ${spec}_transcripts.fa
+
+  ## keep only the reference peptides that ensembl uses for their gene trees.
+  awk 'NR == FNR {
+         a[$1]++
+         next
        }
-     }' <(zcat ${out_dir}/ensembl/Compara.109.protein_default.aa.fasta.gz | grep 'ENSP[[:digit:]]') RS='(^|\n)>' <(zcat ${out_dir}/ensembl/Homo_sapiens.GRCh38.pep.all.fa.gz) > ${out_dir}/peptides/Homo_ensembl.fa
+       NR != FNR {
+         split($1, b, ".")
+         if(">"b[1] in a) {
+           sub(/\n$/, "")
+           print ">"$0
+         }
+       }' <(zcat Compara.109.protein_default.aa.fasta.gz | grep "${spestrings[$i]}") RS='(^|\n)>' <(zcat ${spec^}.*.pep.all.fa.gz) > ${wd}/${out_dir}/peptides/${spec^}.fa
+
+done
+
+cd ${wd}
 
 module purge
 module load hub.apps/anaconda3/2020.11
@@ -49,11 +62,11 @@ conda deactivate
 conda deactivate
 conda activate orthofinder
 
-## run orthofinder with all transdecoder longest isoform peptides, plus ensembl human peptides for annotation
+## run orthofinder with all transdecoder longest isoform peptides, plus ensembl peptides
 
 orthofinder -t 24 \
-  -s raw_data/20221215_primate_allometry/primates_ensemblDup.newick \
+  -s raw_data/20221215_primate_allometry/primates.newick \
   -f ${out_dir}/peptides \
   -o ${out_dir}/of_out
 
-## trying to do all trees with MSAs and iqtree creates at least 650,000 files, which is past the limit on RRA.
+

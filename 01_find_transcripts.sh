@@ -5,15 +5,15 @@
 #SBATCH --qos=rra
 #SBATCH --partition=rra
 #SBATCH --ntasks-per-node=24
-#SBATCH --output=outputs/primates_20230309_all/01_find_transcripts/logs/01_find_transcripts_%a.log
-#SBATCH --array=0-8
+#SBATCH --output=outputs/primates_20230314_mixed/01_find_transcripts/logs/01_find_transcripts_%a.log
+#SBATCH --array=0-2
 
-species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii daubentonia_madagascariensis lemur_catta sapajus_apella)
+species=(daubentonia_madagascariensis lemur_catta sapajus_apella)
 
 spec=${species[$SLURM_ARRAY_TASK_ID]}
 
-ref_dir=outputs/primates_20230309_all/00_references
-out_dir=outputs/primates_20230309_all/01_find_transcripts
+ref_dir=outputs/primates_20230314_mixed/00_references
+out_dir=outputs/primates_20230314_mixed/01_find_transcripts
 
 mkdir -p work/tmp/${spec}
 mkdir -p ${out_dir}/${spec}_superreads
