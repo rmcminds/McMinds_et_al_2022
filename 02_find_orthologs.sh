@@ -29,7 +29,7 @@ wget -N https://ftp.ensembl.org/pub/release-109/emf/ensembl-compara/homologies/C
 species=(callithrix_jacchus homo_sapiens macaca_mulatta microcebus_murinus papio_anubis pongo_abelii)
 spestrings=('ENSCJAP[[:digit:]]' 'ENSP[[:digit:]]' 'ENSMMUP[[:digit:]]' 'ENSMICP[[:digit:]]' 'ENSPANP[[:digit:]]' 'ENSPPYP[[:digit:]]')
 
-for i in 0..5; do
+for i in {0..5}; do
 
   spec=${species[$i]}
   
