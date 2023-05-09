@@ -1,358 +1,526 @@
 
-output_prefix <- path.expand('outputs/primates/')
+output_prefix <- path.expand('outputs/primates_20230314_mixed/')
 
-# genes identified via lit review with specific hypotheses
-focal_gene_names <- c("AKT1", "CASP4", "CASP8", "CCL3", "CCL4", "CD14", "CD69", "CD80", "CD86", "EIF2AK2", "PTK2", "FKBP5", "Gadd45B", "HSPA1A", "IFNG", "IL-10", "Il-12A", "Il-12B", "IL-17A", "IL-17B", "IL-17C", "IL-17F", "IL-1b", "IL-1R1", "IL-1R2", "IL-6", "IL-8", "IL1a", "IRAK4", "IRF3", "LY96", "MAP2K1", "MAP4K5", "MAPK8", "PARP14", "PARP9", "PBEF", "PEBP4", "PTGS2", "SOD1", "SOD2", "SORT1", "TLR2", "TLR4", "TNFalpha", "TRAF1")
+load(file.path(output_prefix, '04_phyr_results.RData'))
 
-load(file.path(output_prefix,'03a_orthologs_phyr_results_noINLA.RData'))
+output_prefix <- path.expand('outputs/primates_20230314_mixed/05_summaries_and_plots')
 
-curgene <- unique(ensembl2ext$ensembl_gene_id[ensembl2ext$external_gene_name == 'TLR4' & grepl('ENSG[[:digit:]]', ensembl2ext$ensembl_gene_id)])
+dir.create(output_prefix)
 
-curgene <- unique(ensembl2ext$ensembl_gene_id[ensembl2ext$external_gene_name == 'IL1B' & grepl('ENSG[[:digit:]]', ensembl2ext$ensembl_gene_id)])
+## define some plotting functions
+# plot the log of the normalized counts as a function of species' mean body size
+plot_species_mean_raw <- function(dat, restab, plot_legends = TRUE, plot_title = 'Total immune gene expression', font.main=2, plot_axes=TRUE) {
+  
+  lo <- levels(as.factor(dat$species))
+  matchlo <- match(names(sort(body_mass_log_sp_means)), lo)
+  
+  if(plot_axes) {
+    plot(exp(body_mass_log_center + body_mass_log_sd * dat$body_mass_log_sp_std) / 1000, 
+         log(dat$count + 0.5) - dat$norm_factor, 
+         col  = dat$treatment, 
+         main = plot_title,
+         xlab = 'Species\' mean body mass (kg)', 
+         ylab = 'Natural log of normalized counts', 
+         pch  = (1:9)[dat$species],
+         log  = 'x',
+         asp = 1, 
+         font.main = font.main)
+  } else {
+    plot(exp(body_mass_log_center + body_mass_log_sd * dat$body_mass_log_sp_std) / 1000, 
+         log(dat$count + 0.5) - dat$norm_factor, 
+         col  = dat$treatment, 
+         xaxt = 'n',
+         yaxt = 'n',
+         ann  = FALSE,
+         pch  = (1:9)[dat$species],
+         log  = 'x',
+         cex = 0.5,
+         asp = 1, 
+         font.main = font.main)    
+  }
+  if(plot_legends) {
+    legend(x         = 'topleft', 
+           legend    = sub('_', ' ', lo[matchlo[1:5]]), 
+           pch       = (1:9)[matchlo[1:5]],
+           text.font = 3)
+    legend(x         = 'bottomright',
+           legend    = sub('_', ' ', lo[matchlo[6:9]]), 
+           pch       = (1:9)[matchlo[6:9]],
+           text.font = 3)
+    legend(x      = 'bottomleft',
+           title  = 'Slopes',
+           legend = c(paste0('LPS(+): β₂+β₃ = ', format(round(restab['evo_allometry_LPS','mean'],2),nsmall=2),          ' (', format(round(restab['evo_allometry_LPS','0.025quant'],2),nsmall=2),          '–', format(round(restab['evo_allometry_LPS','0.975quant'],2),nsmall=2),          ')'),
+                      paste0('Δ–LPS: β₃ = ',     format(round(restab['evo_allometry_LPS_response','mean'],2),nsmall=2), ' (', format(round(restab['evo_allometry_LPS_response','0.025quant'],2),nsmall=2), '–', format(round(restab['evo_allometry_LPS_response','0.975quant'],2),nsmall=2), ')'),
+                      paste0('LPS(–): β₂ = ',    format(round(restab['evo_allometry_baseline','mean'],2),nsmall=2),     ' (', format(round(restab['evo_allometry_baseline','0.025quant'],2),nsmall=2),     '–', format(round(restab['evo_allometry_baseline','0.975quant'],2),nsmall=2),     ')')),
+           col    = c('black','white','red'),
+           lty    = 1)
+  }
+  ## add the fit line from the model for Null samples
+  abline(a = restab['(Intercept)','mean'] - restab['body_mass_log_sp_std','mean'] * (body_mass_log_center - log(1000)) / body_mass_log_sd,
+         b = restab['evo_allometry_baseline','mean'])
+  ## add the fit line from the model for LPS samples
+  abline(a = restab['(Intercept)', 'mean'] + restab['treatmentLPS','mean'] - (restab['body_mass_log_sp_std', 'mean'] + restab['body_mass_log_sp_std:treatmentLPS','mean']) * (body_mass_log_center - log(1000)) / body_mass_log_sd,
+         b = restab['evo_allometry_LPS','mean'],
+         col = 'red')
+  
+}
+#
 
-plot(fits[[curgene]]$dat$body_mass_log_sp_std, log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor, col=fits[[curgene]]$dat$treatment, pch=(1:nlevels(fits[[curgene]]$dat$species))[fits[[curgene]]$dat$species])
-plot(fits[[curgene]]$dat$body_mass_log_diff_std, log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor, col=fits[[curgene]]$dat$treatment)
-plot(body_mass_log_diff_sd * fits[[curgene]]$dat$body_mass_log_diff_std + body_mass_log_sd * fits[[curgene]]$dat$body_mass_log_sp_std, log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor, col=fits[[curgene]]$dat$treatment)
+# plot the log of the normalized counts as a function of individual body sizes normalized by their species' mean body size
+plot_species_dev_raw <- function(dat, restab, plot_legends = TRUE, plot_title = 'Total immune gene expression', font.main = 2) {
+  
+  lo <- levels(as.factor(dat$species))
+  matchlo <- match(names(sort(body_mass_log_sp_means)), lo)
+  
+  ymin <- min(c(log(dat$count + 0.5) - dat$norm_factor, restab['(Intercept)','mean'], restab['(Intercept)', 'mean'] + restab['treatmentLPS','mean']))
+  ymax <- max(c(log(dat$count + 0.5) - dat$norm_factor, restab['(Intercept)','mean'], restab['(Intercept)', 'mean'] + restab['treatmentLPS','mean']))
+  
+  plot(exp(body_mass_log_diff_sd * dat$body_mass_log_diff_std), 
+       log(dat$count + 0.5) - dat$norm_factor, 
+       col = dat$treatment, 
+       pch = (1:9)[dat$species], 
+       main = plot_title,
+       xlab = 'log individual mass normalized by species mean body mass', 
+       ylab = 'log normalized counts',
+       ylim = c(ymin, ymax),
+       log = 'x',
+       asp = 1, 
+       font.main = font.main)
+  if(plot_legends) {
+    legend(x      = 'topleft', 
+           legend = sub('_', ' ', lo[matchlo[1:5]]), 
+           pch    = (1:9)[matchlo[1:5]],
+           text.font = 3)
+    legend(x      = 'bottomright', 
+           legend = sub('_', ' ', lo[matchlo[6:9]]), 
+           pch    = (1:9)[matchlo[6:9]],
+           text.font = 3)
+    legend(x      = 'bottomleft',
+           title  = 'Slopes',
+           legend = c(paste0('LPS(–): β₂ = ',     format(round(restab['intra_allometry_baseline','mean'],2),nsmall=2),     ' (', format(round(restab['intra_allometry_baseline','0.025quant'],2),nsmall=2),     '–', format(round(restab['intra_allometry_baseline','0.975quant'],2),nsmall=2),     ')'),
+                      paste0('Δ–LPS: β₃ = ', format(round(restab['intra_allometry_LPS_response','mean'],2),nsmall=2), ' (', format(round(restab['intra_allometry_LPS_response','0.025quant'],2),nsmall=2), '–', format(round(restab['intra_allometry_LPS_response','0.975quant'],2),nsmall=2), ')'),
+                      paste0('LPS(+): β₂+β₃ = ',   format(round(restab['intra_allometry_LPS','mean'],2),nsmall=2),          ' (', format(round(restab['intra_allometry_LPS','0.025quant'],2),nsmall=2),          '–', format(round(restab['intra_allometry_LPS','0.975quant'],2),nsmall=2),          ')')),
+           col    = c('black','white','red'),
+           lty    = 1)
+  }
+  ## add the fit line from the model for Null samples
+  abline(a = restab['(Intercept)','mean'],
+         b = restab['intra_allometry_baseline','mean'])
+  ## add the fit line from the model for LPS samples
+  abline(a = restab['(Intercept)', 'mean'] + restab['treatmentLPS','mean'],
+         b = restab['intra_allometry_LPS','mean'],
+         col = 'red')
+  
+}
+#
 
-hi <- t(sapply(unique(fits[[curgene]]$dat$individual), \(x) {
-  datnow <- fits[[curgene]]$dat
-  c(datnow[datnow$individual==x & datnow$treatment=='LPS','body_mass_log_sp_std'], 
-    (log(datnow[datnow$individual==x & datnow$treatment=='LPS','count']) - datnow[datnow$individual==x & datnow$treatment=='LPS','norm_factor']) - 
-      (log(datnow[datnow$individual==x & datnow$treatment=='Null','count']) - datnow[datnow$individual==x & datnow$treatment=='Null','norm_factor']))
-}))
+# plot the difference between LPS and Null as a function of species' mean sizes
+plot_species_mean_diff <- function(dat, restab, plot_legends = TRUE, plot_title = 'Total immune gene expression difference between LPS and Null', font.main = 2) {
+  
+  lo <- levels(as.factor(dat$species))
+  matchlo <- match(names(sort(body_mass_log_sp_means)), lo)
+  
+  temp <- t(sapply(unique(dat$individual), \(x) {
+    c(dat[dat$individual==x & dat$treatment=='LPS','body_mass_log_sp_std'], 
+      (log(dat[dat$individual==x & dat$treatment=='LPS','count'] + 0.5) - dat[dat$individual==x & dat$treatment=='LPS','norm_factor']) - 
+        (log(dat[dat$individual==x & dat$treatment=='Null','count'] + 0.5) - dat[dat$individual==x & dat$treatment=='Null','norm_factor']))
+  }))
+  
+  plot(exp(body_mass_log_center + body_mass_log_sd * temp[,1]) / 1000, 
+       temp[,2],
+       pch  = (1:9)[as.factor(sample_data_filt$genus_species)[match(rownames(temp), sample_data_filt$Animal.ID)]], 
+       main = plot_title, 
+       xlab = 'Species\' mean body mass (kg)', 
+       ylab = 'difference in natural log of normalized counts between LPS and Null',
+       log  = 'x',
+       asp = 1, 
+       font.main = font.main)
+  if(plot_legends) {
+    legend(x      = 'topleft', 
+           legend = sub('_', ' ', lo[matchlo]), 
+           pch    = (1:9)[matchlo],
+           text.font = 3)
+  }
+  abline(a = restab['treatmentLPS','mean'] - restab['body_mass_log_sp_std:treatmentLPS','mean'] * (body_mass_log_center - log(1000)) / body_mass_log_sd,
+         b = restab['evo_allometry_LPS_response','mean'])
+  
+}
+#
 
-plot(hi, pch=(1:nlevels(as.factor(sample_data_filt$Family)))[as.factor(sample_data_filt$Family)[match(rownames(hi), sample_data_filt$Animal.ID)]])
-
-plot(body_mass_log_sd * dat_ortho$body_mass_log_sp_std, log(dat_ortho$count) - dat_ortho$norm_factor, col=dat_ortho$treatment, main='Total immune gene expression', xlab='log body size', ylab='log normalized counts')
-legend(x='topleft',legend=c('Null','LPS'),col=c('black','red'),lty=1)
-
-plot(body_mass_log_sd * dat_ortho$body_mass_log_sp_std, body_mass_log_diff_sd * dat_ortho$body_mass_log_diff_std)
-
-ww <- 2
-plot(body_mass_log_sd * module_fits[[ww]]$dat$body_mass_log_sp_std, log(module_fits[[ww]]$dat$count) - module_fits[[ww]]$dat$norm_factor, col=module_fits[[ww]]$dat$treatment, main='Immune module expression', xlab='log body size', ylab='log normalized counts')
- 
-x1 <- (body_mass_log_diff_sd * fits[[curgene]]$dat$body_mass_log_diff_std)
-x2 <- x1 * (fits[[curgene]]$dat$treatment == 'LPS')
-y <- (log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor)
-curgenein <- lm(y~x1+x2)$coefficients[[1]]
-curgeneco1 <- lm(y~x1+x2)$coefficients[[2]]
-curgeneco2 <- lm(y~x1+x2)$coefficients[[3]]
-adjustedcurgene <- y - (curgeneco1 * x1) - (curgeneco2 * x2)
-plot(body_mass_log_sd * fits[[curgene]]$dat$body_mass_log_sp_std, adjustedcurgene, col=fits[[curgene]]$dat$treatment)
+# plot the difference between LPS and Null as a function of individual body sizes normalized by their species' mean body size
+plot_species_dev_diff <- function(dat, restab, plot_legends = TRUE, plot_title = 'Total immune gene expression difference between LPS and Null', font.main = 2) {
+  
+  lo <- levels(as.factor(dat$species))
+  matchlo <- match(names(sort(body_mass_log_sp_means)), lo)
+  
+  temp <- t(sapply(unique(dat$individual), \(x) {
+    c(dat[dat$individual==x & dat$treatment=='LPS','body_mass_log_diff_std'], 
+      (log(dat[dat$individual==x & dat$treatment=='LPS','count'] + 0.5) - dat[dat$individual==x & dat$treatment=='LPS','norm_factor']) - 
+        (log(dat[dat$individual==x & dat$treatment=='Null','count'] + 0.5) - dat[dat$individual==x & dat$treatment=='Null','norm_factor']))
+  }))
+  
+  plot(exp(body_mass_log_diff_sd * temp[,1]), 
+       temp[,2],
+       pch  = (1:9)[as.factor(sample_data_filt$genus_species)[match(rownames(temp), sample_data_filt$Animal.ID)]], 
+       main = plot_title, 
+       xlab = 'log individual mass normalized by species mean body mass', 
+       ylab = 'difference in natural log of normalized counts between LPS and Null',
+       log  = 'x',
+       asp = 1, 
+       font.main = font.main)
+  if(plot_legends) {
+    legend(x      = 'topleft', 
+           legend = sub('_', ' ', lo[matchlo]), 
+           pch    = (1:9)[matchlo],
+           text.font = 3)
+  }
+  abline(a = restab['treatmentLPS','mean'] - restab['intra_allometry_LPS_response','mean'],
+         b = restab['intra_allometry_LPS_response','mean'])
+  
+}
+#
 ##
 
-# filter out genes that didn't converge
-fitsFilt <- fits[!is.na(sapply(fits,function(x) x$fit))]
+## cluster genes by their responses
 
-natural_to_common <- log(exp(1),10)
-mean_rescale <- natural_to_common * body_mass_log_mean
-sd_rescale <- natural_to_common * body_mass_log_sd
-rescaled_coefficients <- t(sapply(fitsFilt, function(fit) {
-  ## convert both from natural to common log and from standardized log body size to actual log body size
-  coefs_old <- fit$coefs * natural_to_common
-  cis_old <- fit$coef_cis * natural_to_common
-  int_diff <- coefs_old[[2]] * (mean_rescale / sd_rescale)
-  lps_diff <- coefs_old[[4]] * (mean_rescale / sd_rescale)
-
-  coefs_new <- c(constitutive_intercept.plotting          = coefs_old[[1]] - int_diff,
-                 induced_intercept.plotting               = coefs_old[[3]] - lps_diff,
-                 constitutive_mean.estimate_norm          = coefs_old[[1]],
-                 constitutive_mean.l95_norm               = cis_old[1,1],
-                 constitutive_mean.u95_norm               = cis_old[1,2],
-                 constitutive_allometry.estimate          = coefs_old[[2]] / sd_rescale,
-                 constitutive_allometry.l95               = cis_old[2,1] / sd_rescale,
-                 constitutive_allometry.u95               = cis_old[2,2] / sd_rescale,
-                 constitutive_allometry.estimate_norm     = coefs_old[[2]],
-                 constitutive_allometry.l95_norm          = cis_old[2,1],
-                 constitutive_allometry.u95_norm          = cis_old[2,2],
-                 conserved_induction.estimate_norm        = coefs_old[[3]],
-                 conserved_induction.l95_norm             = cis_old[3,1],
-                 conserved_induction.u95_norm             = cis_old[3,2],
-                 allometric_induction.estimate            = coefs_old[[4]] / sd_rescale,
-                 allometric_induction.l95                 = cis_old[4,1] / sd_rescale,
-                 allometric_induction.u95                 = cis_old[4,2] / sd_rescale,
-                 allometric_induction.estimate_norm       = coefs_old[[4]],
-                 allometric_induction.l95_norm            = cis_old[4,1],
-                 allometric_induction.u95_norm            = cis_old[4,2],
-                 induced_slope.estimate_lincomb           = coefs_old[[5]] / sd_rescale,
-                 induced_slope.l95_lincomb                = cis_old[5,1] / sd_rescale,
-                 induced_slope.u95_lincomb                = cis_old[5,2] / sd_rescale)
-
-  return(coefs_new)
-
+clustertab <- do.call(rbind, lapply(names(fits), \(x) {
+  
+  data.frame(row.names      = x, 
+             HGNC           = unique(ensembl2ext[ensembl2ext$ensembl_gene_id == x, 'external_gene_name']),
+             Deschamps      = unique(ensembl2ext[ensembl2ext$ensembl_gene_id == x, 'module']),
+             Null_mean      = fits[[x]]$restab[1, 'mean'],
+             response_mean  = fits[[x]]$restab[2, 'mean'],
+             LPS_mean       = fits[[x]]$restab[3, 'mean'],
+             Null_025       = fits[[x]]$restab[1, '0.025quant'],
+             response_025   = fits[[x]]$restab[2, '0.025quant'],
+             LPS_025        = fits[[x]]$restab[3, '0.025quant'],
+             Null_975       = fits[[x]]$restab[1, '0.975quant'],
+             response_975   = fits[[x]]$restab[2, '0.975quant'],
+             LPS_975        = fits[[x]]$restab[3, '0.975quant'])
+  
 }))
 
-modules <- read.table('data/primate_allometry/hawash/immune_modules.txt', sep='\t', quote='', header=T)
+clusts <- hclust(dist(clustertab[,3:8], method='euclidean'))
+clustertab <- clustertab[clusts$order,]
 
-gene_names2module <- sapply(gene_names,
-                            function(x) sapply(strsplit(x,'/'),
-                                               function(y) modules$IIG_class[modules$HGNC_symbol %in% y]))
-gene_names2module[sapply(gene_names2module,length) == 0] <- 'none'
-gene_names2module <- simplify2array(gene_names2module)
+write.table(clustertab, file = file.path(output_prefix,'05_gene_summaries.txt'), sep='\t', quote=FALSE, row.names=TRUE)
 
-gnm <- gene_names[gene_names2module != 'none']
-missing <- modules[!modules$HGNC_symbol %in% unlist(strsplit(gnm, '/')),]
+anysig <- apply(clustertab[,6:11], 1, \(x) any(c(x[1:3] > 0, x[4:6] < 0)))
+numsig <- sum(anysig)
 
-genes_modules <- data.frame(module = gene_names2module[names(gene_names) %in% names(fitsFilt)],
-                            gene   = gene_names[names(gene_names) %in% names(fitsFilt)],
-                            up     = as.numeric(sapply(fitsFilt, function(x) x$body_mass_LPS_significant & x$coefs[[4]] > 0)),
-                            down   = as.numeric(sapply(fitsFilt, function(x) x$body_mass_LPS_significant & x$coefs[[4]] < 0)))
-genes_modules <- genes_modules[rownames(genes_modules) %in% names(gene_names)[gene_names2module != 'none'],]
+clustertab_immune <- clustertab[clustertab[,2] != 'no_module_annotation',]
+clustertab_nonimmune <- clustertab[clustertab[,2] == 'no_module_annotation',]
 
-save.image(file.path(output_prefix,'03b_orthologs_results.RData'))
+immu_contingency <- matrix(c(sum(clustertab_immune$Null_025 > 0), sum(clustertab_immune$Null_025 <= 0 & clustertab_immune$Null_975 >= 0), sum(clustertab_immune$Null_975 < 0),
+                             sum(clustertab_immune$response_025 > 0), sum(clustertab_immune$response_025 <= 0 & clustertab_immune$response_975 >= 0), sum(clustertab_immune$response_975 < 0),
+                             sum(clustertab_immune$LPS_025 > 0), sum(clustertab_immune$LPS_025 <= 0 & clustertab_immune$LPS_975 >= 0), sum(clustertab_immune$LPS_975 < 0)),
+                           nrow = 3,
+                           dimnames = list(c('hyper','iso','hypo'),c('baseline','response','lps')))
 
-subtree <- ape::drop.tip(species_tree, species_tree$tip.label[!species_tree$tip.label %in% names(species_strings)])
-subdat <- sample_data[sample_data$Animal.ID %in% sub('_.*','',unlist(sapply(filtered,colnames))),]
-subdat$Body.Mass..g. <- as.numeric(subdat$Body.Mass..g.)
-subdat$genus_species <- factor(subdat$genus_species, levels=subtree$tip.label)
+noni_contingency <- matrix(c(sum(clustertab_nonimmune$Null_025 > 0), sum(clustertab_nonimmune$Null_025 <= 0 & clustertab_nonimmune$Null_975 >= 0), sum(clustertab_nonimmune$Null_975 < 0),
+                             sum(clustertab_nonimmune$response_025 > 0), sum(clustertab_nonimmune$response_025 <= 0 & clustertab_nonimmune$response_975 >= 0), sum(clustertab_nonimmune$response_975 < 0),
+                             sum(clustertab_nonimmune$LPS_025 > 0), sum(clustertab_nonimmune$LPS_025 <= 0 & clustertab_nonimmune$LPS_975 >= 0), sum(clustertab_nonimmune$LPS_975 < 0)),
+                           nrow = 3,
+                           dimnames = list(c('hyper','iso','hypo'),c('baseline','response','lps')))
 
-## plot species phylogeny with individual body sizes
-pdf(file.path(output_prefix,paste0('03b_orthologs_phylomass.pdf')), width=3,height=3)
-treedat <- data.frame(id=subdat$genus_species, size=log(subdat$Body.Mass..g.,10))
-plo <- ggtree::ggtree(subtree) + ggtree::geom_tiplab()
-plo2 <- ggtree::facet_plot(plo, panel='dot', data=treedat, geom=ggtree::geom_point, ggtree::aes(x=size))
-plo2 + ggtree::theme_tree2()
-dev.off()
+hyper_sigtab_Null <- matrix(c(immu_contingency[1,1], sum(immu_contingency[2:3,1]), noni_contingency[1,1], sum(noni_contingency[2:3,1])), nrow=2, dimnames=list(c('hyper','not_hyper'), c('immune','not_immune')))
+iso_sigtab_Null <- matrix(c(immu_contingency[2,1], sum(immu_contingency[c(1,3),1]), noni_contingency[2,1], sum(noni_contingency[c(1,3),1])), nrow=2, dimnames=list(c('iso','not_iso'), c('immune','not_immune')))
+hypo_sigtab_Null <- matrix(c(immu_contingency[3,1], sum(immu_contingency[1:2,1]), noni_contingency[3,1], sum(noni_contingency[1:2,1])), nrow=2, dimnames=list(c('hypo','not_hypo'), c('immune','not_immune')))
+
+hyper_sigtab_response <- matrix(c(immu_contingency[1,2], sum(immu_contingency[2:3,2]), noni_contingency[1,2], sum(noni_contingency[2:3,2])), nrow=2, dimnames=list(c('hyper','not_hyper'), c('immune','not_immune')))
+iso_sigtab_response <- matrix(c(immu_contingency[2,2], sum(immu_contingency[c(1,3),2]), noni_contingency[2,2], sum(noni_contingency[c(1,3),2])), nrow=2, dimnames=list(c('iso','not_iso'), c('immune','not_immune')))
+hypo_sigtab_response <- matrix(c(immu_contingency[3,2], sum(immu_contingency[1:2,2]), noni_contingency[3,2], sum(noni_contingency[1:2,2])), nrow=2, dimnames=list(c('hypo','not_hypo'), c('immune','not_immune')))
+
+hyper_sigtab_LPS <- matrix(c(immu_contingency[1,3], sum(immu_contingency[2:3,3]), noni_contingency[1,3], sum(noni_contingency[2:3,3])), nrow=2, dimnames=list(c('hyper','not_hyper'), c('immune','not_immune')))
+iso_sigtab_LPS <- matrix(c(immu_contingency[2,3], sum(immu_contingency[c(1,3),3]), noni_contingency[2,3], sum(noni_contingency[c(1,3),3])), nrow=2, dimnames=list(c('iso','not_iso'), c('immune','not_immune')))
+hypo_sigtab_LPS <- matrix(c(immu_contingency[3,3], sum(immu_contingency[1:2,3]), noni_contingency[3,3], sum(noni_contingency[1:2,3])), nrow=2, dimnames=list(c('hypo','not_hypo'), c('immune','not_immune')))
+
+t1 <- fisher.test(hyper_sigtab_Null) ## immune annotated genes are NOT differently likely to be hypermetric in Null
+t2 <- fisher.test(iso_sigtab_Null) ## immune annotated genes are NOT differently likely to be isometric in Null
+t3 <- fisher.test(hypo_sigtab_Null) ## immune annotated genes are NOT differently likely to be hypometric in Null
+
+t4 <- fisher.test(hyper_sigtab_response) ## immune annotated genes ARE more likely to have hypermetric responses
+t5 <- fisher.test(iso_sigtab_response) ## immune annotated genes are NOT differently likely to have isometric responses
+t6 <- fisher.test(hypo_sigtab_response) ## immune annotated genes ARE less likely to have hypometric responses
+
+t7 <- fisher.test(hyper_sigtab_LPS) ## immune annotated genes ARE more likely to be hypermetric in LPS
+t8 <- fisher.test(iso_sigtab_LPS) ## immune annotated genes ARE less likely to be isometric in LPS
+t9 <- fisher.test(hypo_sigtab_LPS) ## immune annotated genes are NOT differently likely to be hypometric in LPS
+
+full_contingency <- data.frame(allometry=rep(c('hyper','iso','hypo'),3), beta=c(rep('baseline',3),rep('response',3),rep('LPS',3)), immune=c(immu_contingency), nonimmune=c(noni_contingency), pvalue=sprintf('%.4f', c(t1$p.value,t2$p.value,t3$p.value,t4$p.value,t5$p.value,t6$p.value,t7$p.value,t8$p.value,t9$p.value)))
+write.table(full_contingency, file = file.path(output_prefix,'05_contingency.txt'), sep='\t', quote=FALSE, row.names=FALSE)
+
+##
+
+# genes identified via lit review with specific hypotheses
+focal_gene_names <- c("AKT1", "AP1", "CASP4", "CASP8", "CCL2", "CCL3", "CCL4", "CCL5", 
+                      "CCR1", "CCR2", "CCR3", "CCR4", "CCR5", "CD14", "CD36", "CD40", 
+                      "CD40LG", "CD58", "CD69", "CD80", "CD86", "CTLA4", "CXCL8", "CXCR1", 
+                      "CXCR2", "EIF2AK2", "FKBP5", "FOS", "FOSL1", "FOSL2", "Gadd45B", 
+                      "HSPA1A", "ICAM1", "ICAM2", "ICAM3", "ICAM4", "IFNG", "IL10", 
+                      "IL10RA", "IL10RB", "IL12A", "IL12B", "IL15RA", "IL17A", "IL17B", 
+                      "IL17C", "IL17F", "IL18RAP", "IL1A", "IL1B", "IL1R1", "IL1R2", 
+                      "IL1RAP", "IL1RL1", "IL1RL2", "IL21R", "IL23R", "IL27RA", "IL2RA", 
+                      "IL2RB", "IL2RG", "IL4R", "IL5RA", "IL6", "IL6R", "IL7R", "IL9R", 
+                      "IRAK1", "IRAK4", "IRF1", "IRF2", "IRF3", "IRF4", "IRF5", "IRF7", 
+                      "IRF8", "ITGAL", "ITGAM", "ITGB2", "JUN", "LIFR", "LILRA1", "LILRB1", 
+                      "LILRB2", "LILRB3", "LILRB4", "LRP1", "LY96", "MAP2K1", "MAP4K5", 
+                      "MAPK8", "MYD88", "NFAT5", "NFATC1", "NFATC2", "NFATC3", "NFATC4", 
+                      "NFKB1", "NFKB2", "NFKBIA", "NFKBIB", "NFKBIE", "NFKBIZ", "PARP14", 
+                      "PARP9", "PBEF", "PEBP4", "PTGS2", "PTK2", "PTPRC", "PTPRCAP", 
+                      "REL", "RELA", "RELB", "SELL", "SIRPA", "SOD1", "SOD2", "SORT1", 
+                      "STAT1", "STAT3", "STAT5", "STAT6", "TBK1", "TLR1", "TLR10", 
+                      "TLR2", "TLR3", "TLR4", "TLR5", "TLR6", "TLR7", "TLR8", "TLR9", 
+                      "TNF", "TRAF1", "TRAF6", "TREM1", "VCAM1")
 
 ## identify in my orthologs matches to the focal genes
 focal_genes <- sapply(focal_gene_names, function(x) {
-  searchterm <- paste0('(^|/)',x,'($|/)|(^|/)',gsub('-','',x),'($|/)')
-  y <- names(gene_names)[grep(searchterm,gene_names,ignore.case=TRUE)]
-  if(length(y) == 0) y <- NA
+  searchterm <- paste0('(^|/)', x, '($|/)|(^|/)', gsub('-','',x), '($|/)')
+  matches <- grep(searchterm, ensembl2ext$external_gene_name, ignore.case=TRUE)
+  if(length(matches) > 0) {
+    y <- ensembl2ext[matches[[1]], 'ensembl_gene_id']
+  } else {
+    y <- NA
+  }
   return(y)
 })
 
-focal_genes_missing <- names(focal_genes[is.na(focal_genes)])
-focal_genes <- focal_genes[!is.na(focal_genes)]
+focal_genes_missing <- names(focal_genes[is.na(focal_genes) | (!focal_genes %in% names(fits))])
+focal_genes <- focal_genes[!names(focal_genes) %in% focal_genes_missing]
 focal_genes_nonconvergence <- focal_genes[focal_genes %in% names(fits[is.na(sapply(fits,function(x) x$fit))])]
 focal_genes <- focal_genes[!focal_genes %in% focal_genes_nonconvergence]
 
-focal_summaries <- as.data.frame(rescaled_coefficients[rownames(rescaled_coefficients) %in% focal_genes,])
-focal_summaries$module <- gene_names2module[match(rownames(focal_summaries),names(gene_names2module))]
-rownames(focal_summaries) <- names(focal_genes)[match(rownames(focal_summaries), focal_genes)]
-write.table(focal_summaries, file=file.path(output_prefix,'03b_orthologs_focal_summaries.txt'), sep='\t', quote=FALSE)
+focal_summaries <- do.call(rbind, lapply(names(focal_genes), \(x) {
+  cbind(x, focal_genes[[x]], unique(ensembl2ext[ensembl2ext$ensembl_gene_id == focal_genes[[x]],'module']), rownames(fits[[focal_genes[[x]]]]$restab), fits[[focal_genes[[x]]]]$restab[,c('mean','0.025quant','0.975quant')])
+}))
+colnames(focal_summaries) <- c('gene_name','ensembl_id','module','coefficient','mean','0.025quant','0.975quant')
+rownames(focal_summaries) <- NULL
 
-## plot semi-raw relative abundance for the focal genes
-rel2abs <- 0.25
+write.table(focal_summaries, file = file.path(output_prefix,'05_focal_summaries.txt'), sep='\t', quote=FALSE, row.names=FALSE)
+
+## make summaries ready to copy in to manuscript, and convert standardized effect sizes to natural effect sizes
+formatted_summaries <- t(sapply(unique(focal_summaries$gene_name), \(x) {
+  
+  patterns <- sapply(c('evo_allometry_baseline', 'evo_allometry_LPS_response', 'evo_allometry_LPS'), \(y) {
+    if(sign(prod(focal_summaries$'0.025quant'[focal_summaries$gene_name==x & focal_summaries$coefficient %in% y], focal_summaries$'0.975quant'[focal_summaries$gene_name==x & focal_summaries$coefficient %in% y])) != 1) {
+      return(0)
+    } else {
+      return(ifelse(focal_summaries$mean[focal_summaries$gene_name==x & focal_summaries$coefficient %in% y] > 0, '+', '-'))
+    }
+  })
+  
+  c(x,
+    unique(focal_summaries$module[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_baseline']),
+    paste0(patterns, collapse=','),
+    paste0(sprintf('%.2f', focal_summaries$mean[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_baseline']), 
+           '[](', 
+           sprintf('%.2f', focal_summaries$'0.025quant'[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_baseline']), 
+           ', ', 
+           sprintf('%.2f', focal_summaries$'0.975quant'[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_baseline']), 
+           ')'),
+    paste0(sprintf('%.2f', focal_summaries$mean[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_LPS_response']), 
+           '[](', 
+           sprintf('%.2f', focal_summaries$'0.025quant'[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_LPS_response']), 
+           ', ', 
+           sprintf('%.2f', focal_summaries$'0.975quant'[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_LPS_response']), 
+           ')'),
+    paste0(sprintf('%.2f', focal_summaries$mean[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_LPS']), 
+           '[](', 
+           sprintf('%.2f', focal_summaries$'0.025quant'[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_LPS']), 
+           ', ', 
+           sprintf('%.2f', focal_summaries$'0.975quant'[focal_summaries$gene_name==x & focal_summaries$coefficient == 'evo_allometry_LPS']), 
+           ')'))
+}))
+colnames(formatted_summaries) <- c('Gene','Deschamps annotation','Pattern','Constitutive Allometry[](β₂)','Response Allometry[](β₃)','Sepsis Allometry[](β₂+β₃)')
+
+formatted_summaries <- formatted_summaries[order(sapply(strsplit(formatted_summaries[,3], ''), \(x) gsub('-',1,gsub('+',-1,paste0(rev(x), collapse='')))), formatted_summaries[,2]),]
+
+write.table(formatted_summaries, file = file.path(output_prefix,'05_formatted_summaries.txt'), sep='\t', quote=FALSE, row.names=FALSE)
+## for final table, just replace all instances of '[]' with line breaks, and embolden cells with significance
+
+## plot species phylogeny with individual body sizes
+cairo_pdf(file.path(output_prefix,paste0('05_orthologs_phylomass.pdf')), width=4,height=3)
+treedat1 <- data.frame(id=sample_data$genus_species, size=log(as.numeric(sample_data$Body.Mass..g.)/1000,2))
+treedat1 <- treedat1[sample_data$Genus != 'Microcebus' | sample_data$Animal.ID == 'mmurPool',]
+treedat2 <- data.frame(id=names(body_mass_log_sp_means), size=log(exp(body_mass_log_sp_means)/1000,2))
+
+plo <- ggtree::ggtree(species_tree) + ggtree::geom_tiplab()
+plo2 <- ggtree::facet_plot(plo, panel='dot', data=treedat1, geom=\(...) ggtree::geom_point(..., position=ggplot2::position_jitter(0,0.3)), pch=1, ggtree::aes(x=size)) + ggtree::geom_facet(data=treedat2, geom=ggtree::geom_point, pch=3, col='red', panel='dot', ggtree::aes(x=size))
+plo2 + ggtree::theme_tree2() + ggplot2::scale_x_continuous(breaks=log(c(0.05, 1, 20, 125),2), labels=c('0.05', '1.00', '20.0', '125'))
+dev.off()
+
+## plot log normalized counts against species mean mass
+cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune.pdf'), width=8, height=8)
+plot_species_mean_raw(dat_ortho, ortho_immune_restab)
+dev.off()
+cairo_pdf(file.path(output_prefix,'05_total_immune.pdf'), width=8, height=8)
+plot_species_mean_raw(dat_og, og_immune_restab)
+dev.off()
+
+## plot on natural scale
+dat_ortho$counts_norm <- exp(log(dat_ortho$count + 0.5) - dat_ortho$norm_factor)
+dat_ortho_agg <- aggregate(dat_ortho, by = list(species = dat_ortho$species, treatment = dat_ortho$treatment), FUN = mean)
+cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_naturalScale.pdf'), width=8, height=8)
+plot(exp(body_mass_log_center + body_mass_log_sd * dat_ortho_agg$body_mass_log_sp_std - log(1000)), 
+     dat_ortho_agg$counts_norm, 
+     col  = dat_ortho_agg$treatment, 
+     xlab = 'Species\' mean body mass (kg)', 
+     ylab = 'Normalized counts', 
+     pch  = (1:9)[dat_ortho_agg$species])
+dev.off()
+
+cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_naturalScaleX.pdf'), width=8, height=8)
+plot(exp(body_mass_log_center + body_mass_log_sd * dat_ortho_agg$body_mass_log_sp_std - log(1000)), 
+     log(dat_ortho_agg$counts_norm), 
+     col  = dat_ortho_agg$treatment, 
+     xlab = 'Species\' mean body mass (kg)', 
+     ylab = 'Normalized counts', 
+     pch  = (1:9)[dat_ortho_agg$species])
+dev.off()
+
+
+## plot diff in log normalized counts against species mean mass
+cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_diff.pdf'), width=8, height=8)
+plot_species_mean_diff(dat_ortho, ortho_immune_restab)
+dev.off()
+cairo_pdf(file.path(output_prefix,'05_total_immune_diff.pdf'), width=8, height=8)
+plot_species_mean_diff(dat_og, og_immune_restab)
+dev.off()
+
+cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_intra.pdf'), width=8, height=8)
+plot_species_dev_raw(dat_ortho, ortho_immune_restab)
+dev.off()
+cairo_pdf(file.path(output_prefix,'05_total_immune_intra.pdf'), width=8, height=8)
+plot_species_dev_raw(dat_og, og_immune_restab)
+dev.off()
+
+cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_intra_diff.pdf'), width=8, height=8)
+plot_species_dev_diff(dat_ortho, ortho_immune_restab)
+dev.off()
+cairo_pdf(file.path(output_prefix,'05_total_immune_intra_diff.pdf'), width=8, height=8)
+plot_species_dev_diff(dat_og, og_immune_restab)
+dev.off()
+
+cairo_pdf(file.path(output_prefix,'05_total_orthologous_non-immune.pdf'), width=8, height=8)
+plot_species_mean_raw(dat_ortho_nonimmune, ortho_nonimmune_restab, plot_title = 'Total non-immune gene expression')
+dev.off()
+
+cairo_pdf(file.path(output_prefix,'05_total_orthologous_non-immune_inset.pdf'), width=3.5, height=4)
+plot_species_mean_raw(dat_ortho_nonimmune, ortho_nonimmune_restab, plot_legends = FALSE, plot_axes=FALSE)
+dev.off()
+
 gene <- 1
 for(x in 1:ceiling(length(focal_genes)/7)) {
-  pdf(file.path(output_prefix,paste0('03b_orthologs_raw_focal_genes_',x,'.pdf')), width=16, height=8)
+  cairo_pdf(file.path(output_prefix,paste0('05_raw_focal_genes_',x,'.pdf')), width=16, height=8)
   par(mfrow=c(2,4))
-  for(orth in focal_genes[gene:min((gene+6),length(focal_genes))]) {
+  for(g in names(focal_genes)[gene:min((gene+6),length(focal_genes))]) {
 
-    newdat <- fits[[orth]]$data
-    newdat$logrel <- log(newdat$count+0.5) - newdat$size_factor
-    newdat$logrel10 <- newdat$logrel * natural_to_common
-    newdat$body_mass_log <- newdat$body_mass_log_std * body_mass_log_sd + body_mass_log_mean
-    newdat$body_mass_log10 <- newdat$body_mass_log * natural_to_common
-
-    coefs <- rescaled_coefficients[orth,]
-
-    iso_intercept <- -mean_rescale * rel2abs + coefs[['constitutive_intercept.plotting']] + mean_rescale * coefs[['constitutive_allometry.estimate']] + 0.5 * (coefs[['induced_intercept.plotting']] + mean_rescale * coefs[['allometric_induction.estimate']])
-
-    plot(newdat[,c('body_mass_log10','logrel10')], col=c('blue','red')[newdat$treatment], main=gene_names[[orth]], xlab='Log10 g body mass', ylab='Log10 relative abundance', pch=(1:nlevels(newdat$species))[newdat$species], col.main = c('black','red')[fits[[orth]]$body_mass_LPS_significant + 1])
-    abline(coef=c(iso_intercept,rel2abs), lty=2)
-    abline(coef=coefs[c('constitutive_intercept.plotting','constitutive_allometry.estimate')], col='blue')
-    abline(coef=coefs[c('constitutive_intercept.plotting','constitutive_allometry.estimate')] + coefs[c('induced_intercept.plotting','allometric_induction.estimate')], col='red')
+    curgene <- focal_genes[[g]]
+      
+    ## plot the gene abundance as function of species mean size
+    plot_species_mean_raw(fits[[curgene]]$dat, fits[[curgene]]$restab, FALSE, g)
 
   }
   plot.new()
-  legend(x='bottomleft',legend=c('Null','LPS'),col=c('blue','red'),lty=1)
-  legend(x='topleft',legend=levels(newdat$species), pch=(1:nlevels(newdat$species)), lty = rep(NULL,nlevels(newdat$species)))
+  lo <- levels(as.factor(fits[[1]]$dat$species))
+  matchlo <- match(names(sort(body_mass_log_sp_means)), lo)
+  legend(x = 'bottomleft', legend = c('Null','LPS'), col = c('black','red'), lty = 1)
+  legend(x = 'topleft', legend = lo[matchlo], pch = (1:9)[matchlo])
+  dev.off()
+  
+  cairo_pdf(file.path(output_prefix,paste0('05_raw_focal_genes_dev_',x,'.pdf')), width=16, height=8)
+  par(mfrow=c(2,4))
+  for(g in names(focal_genes)[gene:min((gene+6),length(focal_genes))]) {
 
+    curgene <- focal_genes[[g]]
+      
+    ## plot the gene abundance as function of species mean size
+    plot_species_dev_raw(fits[[curgene]]$dat, fits[[curgene]]$restab, FALSE, g)
+
+  }
+  plot.new()
+  lo <- levels(as.factor(fits[[1]]$dat$species))
+  matchlo <- match(names(sort(body_mass_log_sp_means)), lo)
+  legend(x = 'bottomleft', legend = c('Null','LPS'), col = c('black','red'), lty = 1)
+  legend(x = 'topleft', legend = lo[matchlo], pch = (1:9)[matchlo])
   dev.off()
 
   gene <- gene + 7
 }
+##
 
-## re-plot scatter plots for more-focused set of genes TLR4, IL1B, and CD69 for figure 1
-pdf(file.path(output_prefix,paste0('Figure_1_raw.pdf')), width=4, height=16)
-par(mfrow=c(4,1))
-for(gene in c('TLR4', 'IL1B', 'CD69')) {
+## figure 3
 
-  orth <- names(gene_names)[grep(gene,gene_names)]
-  newdat <- fits[[orth]]$data
-  newdat$logrel <- log(newdat$count+0.5) - newdat$size_factor
-  newdat$logrel10 <- newdat$logrel * natural_to_common
-  newdat$body_mass_log <- newdat$body_mass_log_std * body_mass_log_sd + body_mass_log_mean
-  newdat$body_mass_log10 <- newdat$body_mass_log * natural_to_common
+cairo_pdf(file.path(output_prefix, '05_figure_3_raw.pdf'), width=9, height=6.5)
+par(mfrow=c(2,3), pty='s')
 
-  coefs <- rescaled_coefficients[orth,]
+## plot the gene abundance as function of species mean size
+plot_species_mean_raw(fits[[focal_genes[['TLR4']]]]$dat, fits[[focal_genes[['TLR4']]]]$restab, FALSE, 'TLR4', font.main=4)
+legend('topleft', "D.", bty='n', text.font=2, x.intersp=0)
 
-  iso_intercept <- -mean_rescale * rel2abs + coefs[['constitutive_intercept.plotting']] + mean_rescale * coefs[['constitutive_allometry.estimate']] + 0.5 * (coefs[['induced_intercept.plotting']] + mean_rescale * coefs[['allometric_induction.estimate']])
-
-  plot(newdat[,c('body_mass_log10','logrel10')], col=c('blue','red')[newdat$treatment], main=gene_names[[orth]], xlab='Log10 g body mass', ylab='Log10 relative abundance', pch=(1:nlevels(newdat$species))[newdat$species], col.main = c('black','red')[fits[[orth]]$body_mass_LPS_significant + 1])
-  abline(coef=c(iso_intercept,rel2abs), lty=2)
-  abline(coef=coefs[c('constitutive_intercept.plotting','constitutive_allometry.estimate')], col='blue')
-  abline(coef=coefs[c('constitutive_intercept.plotting','constitutive_allometry.estimate')] + coefs[c('induced_intercept.plotting','allometric_induction.estimate')], col='red')
-
-}
 plot.new()
-legend(x='bottomleft',legend=c('Null','LPS'),col=c('blue','red'),lty=1)
-legend(x='topleft',legend=levels(newdat$species), pch=(1:nlevels(newdat$species)), lty = rep(NULL,nlevels(newdat$species)))
+lo <- levels(as.factor(fits[[1]]$dat$species))
+matchlo <- match(names(sort(body_mass_log_sp_means)), lo)
+legend(x = 'bottomleft', legend = sub('_', ' ', lo[matchlo]), pch = (1:9)[matchlo], text.font = 3)
+legend(x = 'bottomright', legend = c('Null','LPS'), col = c('black','red'), lty = 1)
 
-dev.off()
+plot_species_mean_raw(fits[[focal_genes[['CTLA4']]]]$dat, fits[[focal_genes[['CTLA4']]]]$restab, FALSE, 'CTLA4', font.main=4)
+legend('topleft', "E.", bty='n', text.font=2, x.intersp=0)
+for(g in c('IFNG','IL6','IL1B')) {
 
+  curgene <- focal_genes[[g]]
+    
+  ## plot the gene abundance as function of species mean size
+  plot_species_mean_raw(fits[[curgene]]$dat, fits[[curgene]]$restab, FALSE, g, font.main=4)
+  legend('topleft', c(IFNG='F.', IL6='G.', IL1B='H.')[[g]], bty='n', text.font=2, x.intersp=0)
 
-## wrangle coefficients for plotting and meta-stats
-newcoefs <- reshape2::melt(rescaled_coefficients, id.vars=row.names)
-colnames(newcoefs) <- c('gene','variable','value')
-newcoefs$quantity <- sapply(as.character(newcoefs$variable),function(x) strsplit(x,'\\.')[[1]][[2]])
-newcoefs$variable <- sapply(as.character(newcoefs$variable),function(x) strsplit(x,'\\.')[[1]][[1]])
-
-strong_hyper_const <- newcoefs[newcoefs$quantity == 'l95' & newcoefs$value > 0.25 & newcoefs$variable == 'constitutive_allometry',]
-strong_hyper_ind <- newcoefs[newcoefs$quantity == 'l95' & newcoefs$value > 0.25 & newcoefs$variable == 'allometric_induction',]
-
-newcoefs <- merge(newcoefs,genes_modules, by.x='gene', by.y=0, all=TRUE)
-newcoefs$module[is.na(newcoefs$module)] <- 'non-immune'
-module_means <- sapply(levels(newcoefs$variable), function(effname) sapply(unique(newcoefs$module), function(x) {
-  mean(newcoefs[newcoefs$quantity=='estimate_norm' & newcoefs$module==x & newcoefs$variable==effname,'value'],na.rm=TRUE)
-}))
-newcoefs$modules_merged <- newcoefs$module
-newcoefs$modules_merged[!newcoefs$modules_merged %in% c('non-immune','sensor','effector')] <- 'bureaucracy'
-modules_merged_means <- sapply(levels(newcoefs$variable), function(effname) sapply(unique(newcoefs$modules_merged), function(x) {
-  mean(newcoefs[newcoefs$quantity=='estimate_norm' & newcoefs$modules_merged==x & newcoefs$variable==effname,'value'],na.rm=TRUE)
-}))
-newcoefs$modules_merged <- as.factor(newcoefs$modules_merged)
-species_counts <- sapply(filtered,function(x) rowSums(x))
-rownames(species_counts) <- rownames(allcounts)
-gre1 <- apply(species_counts>1,1,function(x)sum(x)>2) ### is this objective??
-subs <- names(gre1)[gre1]
-newcoefs <- newcoefs[newcoefs$variable != 'constitutive_mean' & newcoefs$gene %in% subs,]
-
-newcoefs$module <- relevel(factor(newcoefs$module), 'non-immune')
-newcoefs$modules_merged <- factor(newcoefs$modules_merged, levels=c('non-immune','sensor', 'bureaucracy', 'effector'))
-newcoefs$variable <- factor(newcoefs$variable, levels=c("constitutive_intercept", "conserved_induction","constitutive_allometry","induced_intercept","allometric_induction","induced_slope"))
-###
-
-## do genes in different modules have consistent responses to LPS or body size
-sink(file.path(output_prefix,'03b_orthologs_module_lm_alleffects_allmodules.txt'))
-print(summary(lm(value~0+modules_merged:variable,data=droplevels(newcoefs[newcoefs$quantity=='estimate_norm',]))))
-sink()
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_alleffects_allmodules.pdf'))
-beanplot::beanplot(value~modules_merged:variable, data=droplevels(newcoefs[newcoefs$quantity=='estimate_norm',]), las=2, col=rep(list("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"),3), main='Per-gene linear model coefficients summarized per module', ylim=c(-1,1))
-abline(h=0)
-dev.off()
-
-## do genes in different modules have consistent responses to LPS or body size (include the linear combination quantity)
-sink(file.path(output_prefix,'03b_orthologs_module_lm_alleffects_allmodules_wlincomb.txt'))
-print(summary(lm(value~0+modules_merged:variable,data=droplevels(newcoefs[newcoefs$quantity %in% c('estimate_norm','estimate_lincomb'),]))))
-sink()
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_alleffects_allmodules_wlincomb.pdf'))
-beanplot::beanplot(value~modules_merged:variable, data=droplevels(newcoefs[newcoefs$quantity %in% c('estimate_norm','estimate_lincomb'),]), las=2, col=rep(list("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"),3), main='Per-gene linear model coefficients summarized per module', what=c(1,1,1,0), ylim=c(-1,1))
-abline(h=0)
-dev.off()
-
-## are allometries significant when converted to predicted absolute concentrations
-absolute_coefs <- droplevels(newcoefs[newcoefs$quantity %in% c('estimate','estimate_lincomb') & newcoefs$variable != 'allometric_induction',])
-absolute_coefs$value <- absolute_coefs$value - 0.25
-sink(file.path(output_prefix,'03b_orthologs_module_lm_allmodules_absolute_estimates.txt'))
-print(summary(lm(value~0+modules_merged:variable,data=absolute_coefs)))
-sink()
-
-
-## do immune-annotated genes in different modules have consistent responses to LPS or body size
-tempdat <- droplevels(newcoefs[newcoefs$module != 'non-immune' & newcoefs$quantity=='estimate_norm',])
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_alleffects_onlyImmune.pdf'))
-beanplot::beanplot(value~modules_merged:variable,data=tempdat, las=2, col=rep(list("#E41A1C", "#377EB8", "#4DAF4A"),3), main='All immune genes')
-abline(h=0)
-legend("bottomright", bty="n", levels(tempdat$modules_merged), fill = c("#E41A1C", "#377EB8", "#4DAF4A"))
-dev.off()
-
-## do genes that respond positively or negatively to LPS have consistent responses to body size or the interaction
-upinlps <- newcoefs[newcoefs$variable == 'conserved_induction' & newcoefs$quantity == 'estimate_norm' & newcoefs$value > 0,'gene']
-downinlps <- newcoefs[newcoefs$variable == 'conserved_induction' & newcoefs$quantity == 'estimate_norm' & newcoefs$value < 0,'gene']
-newcoefs$LPSdirection <- sapply(newcoefs$gene, function(x) if(x %in% upinlps) {return('up')} else if(x %in% downinlps) {return('down')} else {return('nonsig')})
-
-sink(file.path(output_prefix,'03b_orthologs_module_lm_alleffects_allmodules_per_LPS_response.txt'))
-print(summary(lm(value~0+modules_merged:LPSdirection:variable,data=droplevels(newcoefs[newcoefs$variable != 'conserved_induction' & newcoefs$quantity=='estimate_norm' & newcoefs$LPSdirection!='nonsig',]))))
-sink()
-
-tempdat <- droplevels(newcoefs[newcoefs$gene %in% c(upinlps,downinlps) & newcoefs$variable != 'conserved_induction' & newcoefs$quantity=='estimate_norm',])
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_LPS_response_allometricEffects_allmodules.pdf'))
-beanplot::beanplot(value~modules_merged:LPSdirection:variable,data=tempdat, las=2, col=rep(list("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"),2), main='Sig-LPS gene allometry')
-abline(h=0)
-legend("bottomright", bty="n", levels(tempdat$modules_merged), fill = c("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"))
-dev.off()
-
-## make plots that can be combined to show main LPS effects and the LPS-specific allometries (figure 3)
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_LPS_response_allometricEffects_allmodules_nonsymm.pdf'))
-beanplot::beanplot(value~LPSdirection:modules_merged:variable,data=tempdat, las=2, col=rep(list("#C28DC8", "#733A78", "#F39192", "#B31417", "#89B7DC", "#2A618D", "#BFE3BF", "#3A8939"),2), main='Gene allometry by mean LPS response', side='both', what=c(1,1,1,0), ylim=c(-1,1))
-abline(h=0)
-legend("bottomright", bty="n", levels(tempdat$modules_merged), fill = c("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"))
-dev.off()
-
-tempdat <- droplevels(newcoefs[newcoefs$variable != 'allometric_induction' & newcoefs$quantity=='estimate_norm',])
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_alleffects_allmodules_tocombine_w_LPS_nonsymm.pdf'))
-beanplot::beanplot(value~modules_merged:variable, data=tempdat, las=2, col=list("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"), main='alleffects', what=c(1,1,1,0), ylim=c(-1,1))
-abline(h=0)
-dev.off()
-##
-
-##do same as above but include linear combination quantity
-
-sink(file.path(output_prefix,'03b_orthologs_module_lm_alleffects_allmodules_per_LPS_response_wlincomb.txt'))
-print(summary(lm(value~0+modules_merged:LPSdirection:variable,data=droplevels(newcoefs[newcoefs$variable != 'conserved_induction' & newcoefs$quantity %in% c('estimate_norm','estimate_lincomb') & newcoefs$LPSdirection!='nonsig',]))))
-sink()
-
-tempdat <- droplevels(newcoefs[newcoefs$gene %in% c(upinlps,downinlps) & newcoefs$variable != 'conserved_induction' & newcoefs$quantity %in% c('estimate_norm','estimate_lincomb'),])
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_LPS_response_allometricEffects_allmodules_wlincomb.pdf'))
-beanplot::beanplot(value~modules_merged:LPSdirection:variable,data=tempdat, las=2, col=rep(list("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"),2), main='Sig-LPS gene allometry')
-abline(h=0)
-legend("bottomright", bty="n", levels(tempdat$modules_merged), fill = c("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"))
-dev.off()
-
-## make plots that can be combined to show main LPS effects and the LPS-specific allometries (figure 3)
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_LPS_response_allometricEffects_allmodules_nonsymm_wlincomb.pdf'))
-beanplot::beanplot(value~LPSdirection:modules_merged:variable,data=tempdat, las=2, col=rep(list("#C28DC8", "#733A78", "#F39192", "#B31417", "#89B7DC", "#2A618D", "#BFE3BF", "#3A8939"),2), main='Gene allometry by mean LPS response', side='both', what=c(1,1,1,0), ylim=c(-1,1))
-abline(h=0)
-legend("bottomright", bty="n", levels(tempdat$modules_merged), fill = c("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"))
-dev.off()
-
-tempdat <- droplevels(newcoefs[newcoefs$variable != 'allometric_induction' & newcoefs$quantity %in% c('estimate_norm','estimate_lincomb'),])
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_alleffects_allmodules_tocombine_w_LPS_nonsymm_wlincomb.pdf'))
-beanplot::beanplot(value~modules_merged:variable, data=tempdat, las=2, col=list("#984EA3", "#E41A1C", "#377EB8", "#4DAF4A"), main='alleffects', what=c(1,1,1,0), ylim=c(-1,1))
-abline(h=0)
-dev.off()
-##
-
-
-## do immune-annotated that respond positively or negatively to LPS have consistent responses to body size or the interaction
-tempdat <- droplevels(newcoefs[newcoefs$gene %in% c(upinlps,downinlps) & newcoefs$variable != 'conserved_induction' & newcoefs$module != 'non-immune' & newcoefs$quantity=='estimate_norm',])
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_LPS_response_allometricEffects_onlyImmune.pdf'))
-beanplot::beanplot(value~modules_merged:LPSdirection:variable, data=tempdat, las=2, col=rep(list("#E41A1C", "#377EB8", "#4DAF4A"),2), main='Sig-LPS gene allometry')
-abline(h=0)
-legend("bottomright", bty="n", levels(tempdat$modules_merged), fill = c("#E41A1C", "#377EB8", "#4DAF4A"))
-dev.off()
-
-## do immune-annotated genes that respond positively to LPS have consistent responses to body size or the interaction
-tempdat <- droplevels(newcoefs[newcoefs$module != 'non-immune' & newcoefs$quantity=='estimate_norm' & newcoefs_onlyimmune$gene %in% upinlps & newcoefs_onlyimmune$variable != 'conserved_induction',])
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_onlyLPSgenes_allometricEffects.pdf'))
-beanplot::beanplot(value~modules_merged:variable,data=tempdat, las=2, col=rep(list("#E41A1C", "#377EB8", "#4DAF4A"),2), main='Positive-LPS gene allometry')
-abline(h=0)
-legend("bottomright", bty="n", levels(tempdat$modules_merged), fill = c("#E41A1C", "#377EB8", "#4DAF4A"))
-dev.off()
-
-## do immune-annotated genes that respond positively or negatively to LPS have consistent responses to body size or the interaction
-tempdat <- droplevels(newcoefs[newcoefs$module != 'non-immune' & newcoefs$quantity=='estimate_norm' & newcoefs$variable != 'conserved_induction',])
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_onlyLPSgenesPOSNEG_allometricEffects.pdf'))
-beanplot::beanplot(value~modules_merged:LPSdirection:variable,data=tempdat, las=2, col=rep(list("#E41A1C", "#377EB8", "#4DAF4A"),2), main='Sig-LPS gene allometry')
-abline(h=0)
-legend("bottomright", bty="n", levels(tempdat$modules_merged), fill = c("#E41A1C", "#377EB8", "#4DAF4A"))
-dev.off()
-
-## do immune-annotated genes that respond /significantly/ positively or negatively to LPS have consistent responses to body size or the interaction
-tempdat <- droplevels(newcoefs[newcoefs$module != 'non-immune' & newcoefs$quantity=='estimate_norm' & newcoefs$variable != 'conserved_induction' & newcoefs$LPSdirection != 'nonsig',])
-pdf(file.path(output_prefix,'03b_orthologs_module_beanplots_onlyLPSgenesPOSNEG_nononsig_allometricEffects.pdf'))
-beanplot::beanplot(value~modules_merged:LPSdirection:variable,data=tempdat, las=2, col=rep(list("#E41A1C", "#377EB8", "#4DAF4A"),2), main='Sig-LPS gene allometry')
-abline(h=0)
-legend("bottomright", bty="n", levels(tempdat$modules_merged), fill = c("#E41A1C", "#377EB8", "#4DAF4A"))
-dev.off()
-
-newcoefs_merged_sig <- list()
-for(eff in levels(newcoefs$variable)) {
-  genes2keep4 <- sapply(unique(newcoefs$gene), function(x) prod(sign(newcoefs[newcoefs$quantity %in% c('l95_norm','u95_norm') & newcoefs$gene == x & newcoefs$variable==eff,'value'])) > 0)
-  newcoefs_merged_sig[[eff]] <- droplevels(newcoefs[newcoefs$gene %in% genes2keep4 & newcoefs$variable == eff,])
 }
+dev.off()
+
+##
 
 
+## make various plots for each focal gene
+for(g in names(focal_genes)) {
+  
+  curgene <- focal_genes[[g]]
+  
+  lo <- levels(as.factor(fits[[curgene]]$dat$species))
+  
+  ## plot the gene abundance as function of species mean size
+  cairo_pdf(file.path(output_prefix, paste0('05_',g,'_species_means.pdf')), width=8, height=8)
+  plot_species_mean_raw(fits[[curgene]]$dat, fits[[curgene]]$restab, FALSE, g)
+  dev.off()
+  
+  ## plot gene abundance as function of difference between individual size and species mean size
+  cairo_pdf(file.path(output_prefix, paste0('05_',g,'_individual_norm_by_species_means.pdf')), width=8, height=8)
+  plot_species_dev_raw(fits[[curgene]]$dat, fits[[curgene]]$restab, FALSE, g)
+  dev.off()
+  
+  ## plot gene abundance as function of individual size
+  cairo_pdf(file.path(output_prefix, paste0('05_',g,'_individual_mass.pdf')), width=8, height=8)
+  plot(body_mass_log_diff_sd * fits[[curgene]]$dat$body_mass_log_diff_std + body_mass_log_sd * fits[[curgene]]$dat$body_mass_log_sp_std, 
+       log(fits[[curgene]]$dat$count) - fits[[curgene]]$dat$norm_factor, 
+       col  = fits[[curgene]]$dat$treatment, 
+       pch  = (1:nlevels(fits[[curgene]]$dat$species))[fits[[curgene]]$dat$species], 
+       main = paste0(g, ' gene expression'), 
+       xlab = 'log individual body size', 
+       ylab = 'log normalized counts')
+  legend(x      = 'topleft', 
+         legend = lo[match(names(sort(body_mass_log_sp_means)), lo)], 
+         pch    = (1:length(lo))[match(names(sort(body_mass_log_sp_means)), lo)])
+  dev.off()
+    
+  ## plot the difference between LPS and Null as a function of species' mean sizes
+  cairo_pdf(file.path(output_prefix, paste0('05_',g,'_species_means_LPS_vs_Null.pdf')), width=8, height=8)
+  plot_species_mean_diff(fits[[curgene]]$dat, fits[[curgene]]$restab, FALSE, g)
+  dev.off()
+  ##
+  
+  ## plot the difference between LPS and Null as a function of the difference between the individual size and the species' mean size
+  cairo_pdf(file.path(output_prefix, paste0('05_',g,'_individual_norm_by_species_means_LPS_vs_Null.pdf')), width=8, height=8)
+  plot_species_dev_diff(fits[[curgene]]$dat, fits[[curgene]]$restab, FALSE, g)
+  dev.off()
+  ##
+  
+}
