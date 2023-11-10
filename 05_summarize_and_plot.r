@@ -7,6 +7,8 @@ output_prefix <- path.expand('outputs/primates_20230314_mixed/05_summaries_and_p
 
 dir.create(output_prefix)
 
+ln2log10 <- log(2) / log(2,base=10)
+
 ## define some plotting functions
 # plot the log of the normalized counts as a function of species' mean body size
 plot_species_mean_raw <- function(dat, restab, plot_legends = TRUE, plot_title = 'Total immune gene expression', font.main=2, plot_axes=TRUE) {
@@ -52,17 +54,23 @@ plot_species_mean_raw <- function(dat, restab, plot_legends = TRUE, plot_title =
            legend = c(paste0('LPS(+): β₂+β₃ = ', format(round(restab['evo_allometry_LPS','mean'],2),nsmall=2),          ' (', format(round(restab['evo_allometry_LPS','0.025quant'],2),nsmall=2),          '–', format(round(restab['evo_allometry_LPS','0.975quant'],2),nsmall=2),          ')'),
                       paste0('Δ–LPS: β₃ = ',     format(round(restab['evo_allometry_LPS_response','mean'],2),nsmall=2), ' (', format(round(restab['evo_allometry_LPS_response','0.025quant'],2),nsmall=2), '–', format(round(restab['evo_allometry_LPS_response','0.975quant'],2),nsmall=2), ')'),
                       paste0('LPS(–): β₂ = ',    format(round(restab['evo_allometry_baseline','mean'],2),nsmall=2),     ' (', format(round(restab['evo_allometry_baseline','0.025quant'],2),nsmall=2),     '–', format(round(restab['evo_allometry_baseline','0.975quant'],2),nsmall=2),     ')')),
-           col    = c('black','white','red'),
+           col    = c('red','black','white'),
            lty    = 1)
   }
   ## add the fit line from the model for Null samples
   abline(a = restab['(Intercept)','mean'] - restab['body_mass_log_sp_std','mean'] * (body_mass_log_center - log(1000)) / body_mass_log_sd,
-         b = restab['evo_allometry_baseline','mean'])
+         b = ln2log10 * restab['evo_allometry_baseline','mean'],
+         col = scales::alpha('black',0.8))
+  ## and the corresponding credible intervals
+  matlines(exp(body_mass_log_center + body_mass_log_sd * seq_bmsp) / 1000, restab[7:56, c('0.025quant','0.975quant')], lty=2, col=scales::alpha('black',0.3))
+
   ## add the fit line from the model for LPS samples
   abline(a = restab['(Intercept)', 'mean'] + restab['treatmentLPS','mean'] - (restab['body_mass_log_sp_std', 'mean'] + restab['body_mass_log_sp_std:treatmentLPS','mean']) * (body_mass_log_center - log(1000)) / body_mass_log_sd,
-         b = restab['evo_allometry_LPS','mean'],
-         col = 'red')
-  
+         b = ln2log10 * restab['evo_allometry_LPS','mean'],
+         col = scales::alpha('red',0.8))
+  ## and the corresponding credible intervals
+  matlines(exp(body_mass_log_center + body_mass_log_sd * seq_bmsp) / 1000, restab[57:106, c('0.025quant','0.975quant')], lty=2, col=scales::alpha('red',0.3))
+
 }
 #
 
@@ -97,20 +105,26 @@ plot_species_dev_raw <- function(dat, restab, plot_legends = TRUE, plot_title = 
            text.font = 3)
     legend(x      = 'bottomleft',
            title  = 'Slopes',
-           legend = c(paste0('LPS(–): β₂ = ',     format(round(restab['intra_allometry_baseline','mean'],2),nsmall=2),     ' (', format(round(restab['intra_allometry_baseline','0.025quant'],2),nsmall=2),     '–', format(round(restab['intra_allometry_baseline','0.975quant'],2),nsmall=2),     ')'),
-                      paste0('Δ–LPS: β₃ = ', format(round(restab['intra_allometry_LPS_response','mean'],2),nsmall=2), ' (', format(round(restab['intra_allometry_LPS_response','0.025quant'],2),nsmall=2), '–', format(round(restab['intra_allometry_LPS_response','0.975quant'],2),nsmall=2), ')'),
-                      paste0('LPS(+): β₂+β₃ = ',   format(round(restab['intra_allometry_LPS','mean'],2),nsmall=2),          ' (', format(round(restab['intra_allometry_LPS','0.025quant'],2),nsmall=2),          '–', format(round(restab['intra_allometry_LPS','0.975quant'],2),nsmall=2),          ')')),
-           col    = c('black','white','red'),
+           legend = c(paste0('LPS(+): β₂+β₃ = ', format(round(restab['intra_allometry_LPS','mean'],2),nsmall=2),          ' (', format(round(restab['intra_allometry_LPS','0.025quant'],2),nsmall=2),          '–', format(round(restab['intra_allometry_LPS','0.975quant'],2),nsmall=2),          ')'),
+                      paste0('Δ–LPS: β₃ = ',     format(round(restab['intra_allometry_LPS_response','mean'],2),nsmall=2), ' (', format(round(restab['intra_allometry_LPS_response','0.025quant'],2),nsmall=2), '–', format(round(restab['intra_allometry_LPS_response','0.975quant'],2),nsmall=2), ')'),
+                      paste0('LPS(–): β₂ = ',    format(round(restab['intra_allometry_baseline','mean'],2),nsmall=2),     ' (', format(round(restab['intra_allometry_baseline','0.025quant'],2),nsmall=2),     '–', format(round(restab['intra_allometry_baseline','0.975quant'],2),nsmall=2),     ')')),
+           col    = c('red','black','white'),
            lty    = 1)
   }
   ## add the fit line from the model for Null samples
   abline(a = restab['(Intercept)','mean'],
-         b = restab['intra_allometry_baseline','mean'])
+         b = ln2log10 * restab['intra_allometry_baseline','mean'],
+         col = scales::alpha('black',0.8))
+  ## and the corresponding credible intervals
+  matlines(exp(body_mass_log_diff_sd * seq_bmdev), restab[157:206, c('0.025quant','0.975quant')], lty=2, col=scales::alpha('black',0.3))
+
   ## add the fit line from the model for LPS samples
   abline(a = restab['(Intercept)', 'mean'] + restab['treatmentLPS','mean'],
-         b = restab['intra_allometry_LPS','mean'],
-         col = 'red')
-  
+         b = ln2log10 * restab['intra_allometry_LPS','mean'],
+         col = scales::alpha('red',0.8))
+  ## and the corresponding credible intervals
+  matlines(exp(body_mass_log_diff_sd * seq_bmdev), restab[207:256, c('0.025quant','0.975quant')], lty=2, col=scales::alpha('red',0.3))
+
 }
 #
 
@@ -142,7 +156,8 @@ plot_species_mean_diff <- function(dat, restab, plot_legends = TRUE, plot_title 
            text.font = 3)
   }
   abline(a = restab['treatmentLPS','mean'] - restab['body_mass_log_sp_std:treatmentLPS','mean'] * (body_mass_log_center - log(1000)) / body_mass_log_sd,
-         b = restab['evo_allometry_LPS_response','mean'])
+         b = ln2log10 * restab['evo_allometry_LPS_response','mean'])
+  matlines(exp(body_mass_log_center + body_mass_log_sd * seq_bmsp) / 1000, restab[107:156, c('0.025quant','0.975quant')], lty=2, col = scales::alpha('black',0.3))
   
 }
 #
@@ -174,9 +189,10 @@ plot_species_dev_diff <- function(dat, restab, plot_legends = TRUE, plot_title =
            pch    = (1:9)[matchlo],
            text.font = 3)
   }
-  abline(a = restab['treatmentLPS','mean'] - restab['intra_allometry_LPS_response','mean'],
-         b = restab['intra_allometry_LPS_response','mean'])
-  
+  abline(a = restab['treatmentLPS','mean'],
+         b = ln2log10 * restab['intra_allometry_LPS_response','mean'])
+  matlines(exp(body_mass_log_diff_sd * seq_bmdev), restab[257:306, c('0.025quant','0.975quant')], lty=2, col=scales::alpha('black',0.3))
+
 }
 #
 ##
