@@ -1,9 +1,36 @@
 
 output_prefix <- path.expand('outputs/primates_20230314_mixed/')
 
-load(file.path(output_prefix, '04_phyr_results.RData'))
+#sampleset <- '20231112_9s'
+sampleset <- '20231112_6s'
 
-output_prefix <- path.expand('outputs/primates_20230314_mixed/05_summaries_and_plots')
+load(file.path(output_prefix, paste0('04_phyr_results_', sampleset, '.RData')))
+
+if(sampleset == '20231112_9s') {
+  sample_data_filt <- sample_data_9s
+  fits <- fits_9s_11_genes[sapply(fits_9s_11_genes, function(x) length(x$fit)>1)]
+  dat_11_genes_immunePool <- dat_9s_11_genes_immunePool
+  res_11_genes_immunePool <- res_9s_11_genes_immunePool
+  restab_11_genes_immunePool <- restab_9s_11_genes_immunePool
+  dat_11_genes_nonimmunePool <- dat_9s_11_genes_nonimmunePool
+  restab_11_genes_nonimmunePool <- restab_9s_11_genes_nonimmunePool
+  dat_orthogroups_immunePool <- dat_9s_orthogroups_immunePool
+  res_orthogroups_immunePool <- res_9s_orthogroups_immunePool
+  restab_orthogroups_immunePool <- restab_9s_orthogroups_immunePool
+} else {
+  sample_data_filt <- sample_data_6s
+  fits <- fits_6s_11_genes[sapply(fits_6s_11_genes, function(x) length(x$fit)>1)]
+  dat_11_genes_immunePool <- dat_6s_11_genes_immunePool
+  res_11_genes_immunePool <- res_6s_11_genes_immunePool
+  restab_11_genes_immunePool <- restab_6s_11_genes_immunePool
+  dat_11_genes_nonimmunePool <- dat_6s_11_genes_nonimmunePool
+  restab_11_genes_nonimmunePool <- restab_6s_11_genes_nonimmunePool
+  dat_orthogroups_immunePool <- dat_6s_orthogroups_immunePool
+  res_orthogroups_immunePool <- res_6s_orthogroups_immunePool
+  restab_orthogroups_immunePool <- restab_6s_orthogroups_immunePool
+}
+
+output_prefix <- path.expand(file.path('outputs','primates_20230314_mixed',paste0('05_summaries_and_plots_', sampleset)))
 
 dir.create(output_prefix)
 
@@ -195,7 +222,29 @@ plot_species_dev_diff <- function(dat, restab, plot_legends = TRUE, plot_title =
 
 }
 #
-##
+
+## check model fits
+resids_11_genes_immunePool <- DHARMa::simulateResiduals(res_11_genes_immunePool, plot = FALSE, ntry = 50)
+cairo_pdf(file.path(output_prefix,'DHARMa_11_genes_immunePool.pdf'), width=8, height=8)
+plot(resids_11_genes_immunePool) ## indicates 'underdispersion', likely due to 'overfitting'. Consequence should be conservative, eg inflated error variance and lower power to detect effects
+dev.off()
+
+res_11_genes_immunePool_no_intercept <- res_11_genes_immunePool
+res_11_genes_immunePool_no_intercept$inla.model$marginals.fixed <- res_11_genes_immunePool_no_intercept$inla.model$marginals.fixed[-1]
+cairo_pdf(file.path(output_prefix,'plotBayes_11_genes_immunePool.pdf'), width=8, height=8)
+phyr::plot_bayes(res_11_genes_immunePool_no_intercept, sort = TRUE)
+dev.off()
+
+resids_orthogroups_immunePool <- DHARMa::simulateResiduals(res_orthogroups_immunePool, plot = FALSE, ntry = 50)
+cairo_pdf(file.path(output_prefix,'DHARMa_orthogroups_immunePool.pdf'), width=8, height=8)
+plot(resids_orthogroups_immunePool) ## indicates 'underdispersion', likely due to 'overfitting'. Consequence should be conservative, eg inflated error variance and lower power to detect effects
+dev.off()
+
+res_orthogroups_immunePool_no_intercept <- res_orthogroups_immunePool
+res_orthogroups_immunePool_no_intercept$inla.model$marginals.fixed <- res_orthogroups_immunePool_no_intercept$inla.model$marginals.fixed[-1]
+cairo_pdf(file.path(output_prefix,'plotBayes_orthogroups_immunePool.pdf'), width=8, height=8)
+phyr::plot_bayes(res_orthogroups_immunePool_no_intercept, sort = TRUE)
+dev.off()
 
 ## cluster genes by their responses
 
@@ -216,29 +265,35 @@ clustertab <- do.call(rbind, lapply(names(fits), \(x) {
   
 }))
 
+## just for convenience ordering when looking at the table of gene responses manually
 clusts <- hclust(dist(clustertab[,3:8], method='euclidean'))
 clustertab <- clustertab[clusts$order,]
 
 write.table(clustertab, file = file.path(output_prefix,'05_gene_summaries.txt'), sep='\t', quote=FALSE, row.names=TRUE)
 
+## test, for each gene, whether it is significant for any of the three quantities in either direction
 anysig <- apply(clustertab[,6:11], 1, \(x) any(c(x[1:3] > 0, x[4:6] < 0)))
 numsig <- sum(anysig)
 
+## subset gene table into immune genes and nonimmune genes
 clustertab_immune <- clustertab[clustertab[,2] != 'no_module_annotation',]
 clustertab_nonimmune <- clustertab[clustertab[,2] == 'no_module_annotation',]
 
+## create contingency table for immune genes
 immu_contingency <- matrix(c(sum(clustertab_immune$Null_025 > 0), sum(clustertab_immune$Null_025 <= 0 & clustertab_immune$Null_975 >= 0), sum(clustertab_immune$Null_975 < 0),
                              sum(clustertab_immune$response_025 > 0), sum(clustertab_immune$response_025 <= 0 & clustertab_immune$response_975 >= 0), sum(clustertab_immune$response_975 < 0),
                              sum(clustertab_immune$LPS_025 > 0), sum(clustertab_immune$LPS_025 <= 0 & clustertab_immune$LPS_975 >= 0), sum(clustertab_immune$LPS_975 < 0)),
                            nrow = 3,
                            dimnames = list(c('hyper','iso','hypo'),c('baseline','response','lps')))
 
+## create contingency table for nonimmune genes
 noni_contingency <- matrix(c(sum(clustertab_nonimmune$Null_025 > 0), sum(clustertab_nonimmune$Null_025 <= 0 & clustertab_nonimmune$Null_975 >= 0), sum(clustertab_nonimmune$Null_975 < 0),
                              sum(clustertab_nonimmune$response_025 > 0), sum(clustertab_nonimmune$response_025 <= 0 & clustertab_nonimmune$response_975 >= 0), sum(clustertab_nonimmune$response_975 < 0),
                              sum(clustertab_nonimmune$LPS_025 > 0), sum(clustertab_nonimmune$LPS_025 <= 0 & clustertab_nonimmune$LPS_975 >= 0), sum(clustertab_nonimmune$LPS_975 < 0)),
                            nrow = 3,
                            dimnames = list(c('hyper','iso','hypo'),c('baseline','response','lps')))
 
+## create contingency tables where tests can be interpreted easily. Because there are three categories, when testing one, it should be compared to the sum of the other two
 hyper_sigtab_Null <- matrix(c(immu_contingency[1,1], sum(immu_contingency[2:3,1]), noni_contingency[1,1], sum(noni_contingency[2:3,1])), nrow=2, dimnames=list(c('hyper','not_hyper'), c('immune','not_immune')))
 iso_sigtab_Null <- matrix(c(immu_contingency[2,1], sum(immu_contingency[c(1,3),1]), noni_contingency[2,1], sum(noni_contingency[c(1,3),1])), nrow=2, dimnames=list(c('iso','not_iso'), c('immune','not_immune')))
 hypo_sigtab_Null <- matrix(c(immu_contingency[3,1], sum(immu_contingency[1:2,1]), noni_contingency[3,1], sum(noni_contingency[1:2,1])), nrow=2, dimnames=list(c('hypo','not_hypo'), c('immune','not_immune')))
@@ -366,63 +421,62 @@ plo2 + ggtree::theme_tree2() + ggplot2::scale_x_continuous(breaks=log(c(0.05, 1,
 dev.off()
 
 ## plot log normalized counts against species mean mass
-cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune.pdf'), width=8, height=8)
-plot_species_mean_raw(dat_ortho, ortho_immune_restab)
+cairo_pdf(file.path(output_prefix,'05_total_11_orthologous_immune.pdf'), width=8, height=8)
+plot_species_mean_raw(dat_11_genes_immunePool, restab_11_genes_immunePool)
 dev.off()
-cairo_pdf(file.path(output_prefix,'05_total_immune.pdf'), width=8, height=8)
-plot_species_mean_raw(dat_og, og_immune_restab)
+cairo_pdf(file.path(output_prefix,'05_total_immune_orthogroups.pdf'), width=8, height=8)
+plot_species_mean_raw(dat_orthogroups_immunePool, restab_orthogroups_immunePool)
 dev.off()
 
 ## plot on natural scale
-dat_ortho$counts_norm <- exp(log(dat_ortho$count + 0.5) - dat_ortho$norm_factor)
-dat_ortho_agg <- aggregate(dat_ortho, by = list(species = dat_ortho$species, treatment = dat_ortho$treatment), FUN = mean)
+dat_11_genes_immunePool$counts_log_norm <- log(dat_11_genes_immunePool$count + 0.5) - dat_11_genes_immunePool$norm_factor
+dat_11_genes_immunePool_agg <- aggregate(dat_11_genes_immunePool, by = list(species = dat_11_genes_immunePool$species, treatment = dat_11_genes_immunePool$treatment), FUN = mean)
 cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_naturalScale.pdf'), width=8, height=8)
-plot(exp(body_mass_log_center + body_mass_log_sd * dat_ortho_agg$body_mass_log_sp_std - log(1000)), 
-     dat_ortho_agg$counts_norm, 
-     col  = dat_ortho_agg$treatment, 
+plot(exp(body_mass_log_center + body_mass_log_sd * dat_11_genes_immunePool_agg$body_mass_log_sp_std - log(1000)), 
+     exp(dat_11_genes_immunePool_agg$counts_log_norm), 
+     col  = dat_11_genes_immunePool_agg$treatment, 
      xlab = 'Species\' mean body mass (kg)', 
      ylab = 'Normalized counts', 
-     pch  = (1:9)[dat_ortho_agg$species])
+     pch  = (1:9)[dat_11_genes_immunePool_agg$species])
 dev.off()
 
 cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_naturalScaleX.pdf'), width=8, height=8)
-plot(exp(body_mass_log_center + body_mass_log_sd * dat_ortho_agg$body_mass_log_sp_std - log(1000)), 
-     log(dat_ortho_agg$counts_norm), 
-     col  = dat_ortho_agg$treatment, 
+plot(exp(body_mass_log_center + body_mass_log_sd * dat_11_genes_immunePool_agg$body_mass_log_sp_std - log(1000)), 
+     dat_11_genes_immunePool_agg$counts_log_norm, 
+     col  = dat_11_genes_immunePool_agg$treatment, 
      xlab = 'Species\' mean body mass (kg)', 
-     ylab = 'Normalized counts', 
-     pch  = (1:9)[dat_ortho_agg$species])
+     ylab = 'Normalized counts (log)', 
+     pch  = (1:9)[dat_11_genes_immunePool_agg$species])
 dev.off()
-
 
 ## plot diff in log normalized counts against species mean mass
 cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_diff.pdf'), width=8, height=8)
-plot_species_mean_diff(dat_ortho, ortho_immune_restab)
+plot_species_mean_diff(dat_11_genes_immunePool, restab_11_genes_immunePool)
 dev.off()
 cairo_pdf(file.path(output_prefix,'05_total_immune_diff.pdf'), width=8, height=8)
-plot_species_mean_diff(dat_og, og_immune_restab)
+plot_species_mean_diff(dat_orthogroups_immunePool, restab_orthogroups_immunePool)
 dev.off()
 
 cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_intra.pdf'), width=8, height=8)
-plot_species_dev_raw(dat_ortho, ortho_immune_restab)
+plot_species_dev_raw(dat_11_genes_immunePool, restab_11_genes_immunePool)
 dev.off()
 cairo_pdf(file.path(output_prefix,'05_total_immune_intra.pdf'), width=8, height=8)
-plot_species_dev_raw(dat_og, og_immune_restab)
+plot_species_dev_raw(dat_orthogroups_immunePool, restab_orthogroups_immunePool)
 dev.off()
 
 cairo_pdf(file.path(output_prefix,'05_total_orthologous_immune_intra_diff.pdf'), width=8, height=8)
-plot_species_dev_diff(dat_ortho, ortho_immune_restab)
+plot_species_dev_diff(dat_11_genes_immunePool, restab_11_genes_immunePool)
 dev.off()
 cairo_pdf(file.path(output_prefix,'05_total_immune_intra_diff.pdf'), width=8, height=8)
-plot_species_dev_diff(dat_og, og_immune_restab)
+plot_species_dev_diff(dat_orthogroups_immunePool, restab_orthogroups_immunePool)
 dev.off()
 
 cairo_pdf(file.path(output_prefix,'05_total_orthologous_non-immune.pdf'), width=8, height=8)
-plot_species_mean_raw(dat_ortho_nonimmune, ortho_nonimmune_restab, plot_title = 'Total non-immune gene expression')
+plot_species_mean_raw(dat_11_genes_nonimmunePool, restab_11_genes_nonimmunePool, plot_title = 'Total non-immune gene expression')
 dev.off()
 
 cairo_pdf(file.path(output_prefix,'05_total_orthologous_non-immune_inset.pdf'), width=3.5, height=4)
-plot_species_mean_raw(dat_ortho_nonimmune, ortho_nonimmune_restab, plot_legends = FALSE, plot_axes=FALSE)
+plot_species_mean_raw(dat_11_genes_nonimmunePool, restab_11_genes_nonimmunePool, plot_legends = FALSE, plot_axes=FALSE)
 dev.off()
 
 gene <- 1
@@ -540,3 +594,4 @@ for(g in names(focal_genes)) {
   ##
   
 }
+
